@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V001__create_user.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V002__create_contractors.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V003__create_bank_accounts.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V004__create_bank_configurations.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V005__create_clients.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V006__create_subscriptions.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V007__create_transactions.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V008__create_installments.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources/db/migrations/V009__create_transaction_logs.sql" dialect="PostgreSQL" />
+    <file url="PROJECT" dialect="PostgreSQL" />
+  </component>
+</project>

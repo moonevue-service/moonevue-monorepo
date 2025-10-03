@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: moonevue-postgres
+    environment:
+      POSTGRES_DB: moonevue
+      POSTGRES_USER: moonevue
+      POSTGRES_PASSWORD: moone_data_vue
+      TZ: America/Sao_Paulo
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moonevue -d moonevue"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  finance:
+    build:
+      context: ./finance
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/moonevue
+      DB_USER: moonevue
+      DB_PASS: moone_data_vue
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8082:8080"
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      finance:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/moonevue
+      DB_USER: moonevue
+      DB_PASS: moone_data_vue
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: moonevue-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: moone_pg_vue
+      TZ: America/Sao_Paulo
+    ports:
+      - "8081:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  db_data:

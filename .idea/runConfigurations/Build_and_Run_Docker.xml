@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="Build and Run Docker" type="CompoundRunConfigurationType">
+        <toRun name="Build for Docker" type="MavenRunConfiguration" />
+        <toRun name="Docker Compose Up" type="docker-deploy" />
+        <method v="2" />
+    </configuration>
+</component>

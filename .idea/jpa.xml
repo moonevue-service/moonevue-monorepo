@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="JpaBuddyIdeaProjectConfig" migrateIndexesAndConstraints="true" reUseTableSchema="true">
+    <option name="migrateIndexesAndConstraints" value="true" />
+    <option name="reLastEntityCreationPackage" value="core/src/main/java/com/moonevue/core/entity" />
+    <option name="reverseEngineeringLastDbConnectionId" value="0241c08a-6ec7-4e67-900f-ace767df8e70" />
+  </component>
+</project>
