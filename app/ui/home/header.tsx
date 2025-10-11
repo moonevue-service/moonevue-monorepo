@@ -63,7 +63,7 @@ interface MenuItem {
   items?: MenuItem[];
 }
 
-interface Navbar1Props {
+interface HeaderProps {
   logo?: {
     url: string;
     src: string;
@@ -149,7 +149,7 @@ const Header = ({
     login: { title: "Entrar", url: "#" },
     signup: { title: "Cadastrar", url: "#" },
   },
-}: Navbar1Props) => {
+}: HeaderProps) => {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
   useEffect(() => {
@@ -165,7 +165,7 @@ const Header = ({
 
   return (
     <header className="py-4 relative z-50 bg-background">
-      <div className="max-w-7xl mx-auto px-4 flex flex-col">
+      <div className="container mx-auto px-4 flex flex-col">
         {/* Desktop Menu */}
         <nav className="hidden justify-between lg:flex items-center">
           <div className="flex items-center gap-6">
