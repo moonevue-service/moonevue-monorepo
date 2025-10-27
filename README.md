@@ -96,23 +96,8 @@ Arquitetura lógica:
 - Observabilidade avançada e alertas: integrar métricas e tracing distribuído (OpenTelemetry).
 - Segurança: rate-limiting, WAF e hardening adicional de endpoints administrativos.
 
-## 9. Como executar (mínimo para validação local)
-1. Build dos JARs:
-   - `mvn -DskipTests -pl auth,gateway,finance -am package`
-2. Construir imagens (exemplo local):
-   - `docker build -t meuuser/moonevue-auth:prod -f auth/Dockerfile .`
-   - `docker build -t meuuser/moonevue-gateway:prod -f gateway/Dockerfile .`
-   - `docker build -t meuuser/moonevue-finance:prod -f finance/Dockerfile .`
-3. Subir com compose de teste:
-   - Copiar `.env.prod.example` para `.env` e preencher segredos.
-   - `docker compose -f docker-compose.prod.yml up -d`
-4. Testes:
-   - Gateway (ponto único público): `http://localhost:8080/swagger-ui.html`
-   - Auth (interno): `http://localhost:8081/actuator/health` (se exposto)
-   - Finance: `http://localhost:8082/actuator/health` (se exposto)
-
-## 10. Conclusão
-O projeto entrega uma base técnica sólida para o TCC I, demonstrando domínio sobre desenho de serviços, autenticação segura, documentação e infra reproducível via containers. Mantendo os serviços desacoplados, a solução facilita evoluções (escala, novas features, hardening), ao mesmo tempo em que fornece um artefato prático para integração com front-end e demonstrações.
+## 9. Conclusão
+O projeto entrega uma base técnica sólida, demonstrando domínio sobre desenho de serviços, autenticação segura, documentação e infra reproducível via containers. Mantendo os serviços desacoplados, a solução facilita evoluções (escala, novas features, hardening), ao mesmo tempo em que fornece um artefato prático para integração com front-end e demonstrações.
 
 ## Referências
 - Spring Boot Reference Documentation
