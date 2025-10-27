@@ -1,0 +1,5 @@
+# Desenvolvimento: roda mvn spring-boot:run com hot reload via DevTools
+FROM maven:3.9.6-eclipse-temurin-21
+WORKDIR /app/moonevue
+EXPOSE 8080 5005
+CMD ["mvn", "spring-boot:run"]

@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: auth
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
+    username: ${SPRING_DATASOURCE_USERNAME:moonevue}
+    password: ${SPRING_DATASOURCE_PASSWORD:moone_data_vue}
+
+server:
+  port: 8081
+  forward-headers-strategy: framework
+
+moonevue:
+  auth:
+    cookie:
+      name: sid
+      domain: ${AUTH_COOKIE_DOMAIN:localhost}
+      path: /
+      secure: ${AUTH_COOKIE_SECURE:false}   # true em prod
+      same-site: ${AUTH_COOKIE_SAMESITE:Lax} # Strict em prod
+      max-age-seconds: ${AUTH_COOKIE_MAX_AGE:1800} # 30 min
+      renew-threshold-seconds: ${AUTH_COOKIE_RENEW_THRESHOLD:300} # renova nos últimos 5 min
+    internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+moonevue:
+  auth:
+    cookie:
+      secure: true
+      same-site: Strict

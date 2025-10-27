@@ -1,12 +1,14 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.Environment;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
@@ -38,45 +40,45 @@ public class BankConfiguration {
     @JoinColumn(name = "bank_account_id", nullable = false)
     private BankAccount bankAccount;
 
-    @Size(max = 500)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @Column(name = "api_key", nullable = false, length = 500)
-    private String apiKey;
-
-    @Size(max = 500)
-    @Column(name = "api_secret", length = 500)
-    private String apiSecret;
-
-    @Size(max = 20)
-    @NotNull
-    @ColumnDefault("'SANDBOX'")
     @Column(name = "environment", nullable = false, length = 20)
-    private String environment;
+    private Environment environment = Environment.SANDBOX;
 
     @NotNull
-    @ColumnDefault("'{}'")
     @Column(name = "extra_config", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
-    private Map<String, Object> extraConfig;
+    private Map<String, Object> extraConfig = Map.of();
 
     @NotNull
-    @ColumnDefault("true")
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive = false;
+    private Boolean isActive = true;
 
     @Size(max = 500)
     @Column(name = "webhook_url", length = 500)
     private String webhookUrl;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
     @Column(name = "last_sync_at")
     private OffsetDateTime lastSyncAt;
 
+    // Recomenda-se armazenar certificados/senhas em cofre (ex.: HashiCorp Vault, AWS Secrets Manager)
+    @Column(name = "certificate_path")
+    private String certificatePath;
+
+    @Column(name = "certificate_password")
+    private String certificatePassword;
+
+    public BankConfiguration() {
+    }
+
+    public BankConfiguration(String certPath, String certPassword) {
+    }
 }

@@ -1,13 +1,15 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.PaymentMethod;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -21,6 +23,8 @@ import java.time.OffsetDateTime;
         @Index(name = "idx_installment_transaction", columnList = "transaction_id"),
         @Index(name = "idx_installment_due_date", columnList = "due_date"),
         @Index(name = "idx_installment_status", columnList = "status")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_tx_installment_unique", columnNames = {"transaction_id", "installment_number"})
 })
 public class Installment {
     @Id
@@ -46,9 +50,8 @@ public class Installment {
     @Column(name = "amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal amount;
 
-    @ColumnDefault("0")
     @Column(name = "interest_amount", precision = 18, scale = 2)
-    private BigDecimal interestAmount;
+    private BigDecimal interestAmount = BigDecimal.ZERO;
 
     @NotNull
     @Column(name = "due_date", nullable = false)
@@ -62,13 +65,12 @@ public class Installment {
 
     @Size(max = 20)
     @NotNull
-    @ColumnDefault("'PENDING'")
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private String status = "PENDING";
 
-    @Size(max = 50)
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method", length = 50)
-    private String paymentMethod;
+    private PaymentMethod paymentMethod;
 
     @Size(max = 200)
     @Column(name = "payment_reference", length = 200)
@@ -77,16 +79,14 @@ public class Installment {
     @Column(name = "overdue_days")
     private Integer overdueDays;
 
-    @ColumnDefault("0")
     @Column(name = "overdue_fee", precision = 18, scale = 2)
-    private BigDecimal overdueFee;
+    private BigDecimal overdueFee = BigDecimal.ZERO;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
-
 }

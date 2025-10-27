@@ -1,0 +1,49 @@
+package com.moonevue.core.repository;
+
+import com.moonevue.core.entity.Transaction;
+import com.moonevue.core.enums.TransactionStatus;
+import com.moonevue.core.enums.TransactionType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+
+    Page<Transaction> findByAccountId(Long accountId, Pageable pageable);
+
+    Page<Transaction> findBySubscriptionId(Long subscriptionId, Pageable pageable);
+
+    Page<Transaction> findByStatus(TransactionStatus status, Pageable pageable);
+
+    Page<Transaction> findByType(TransactionType type, Pageable pageable);
+
+    Optional<Transaction> findByExternalReference(String externalReference);
+
+    List<Transaction> findTop50ByAccountIdOrderByCreatedAtDesc(Long accountId);
+
+    @Query("""
+           select coalesce(sum(t.amount), 0)
+           from Transaction t
+           where t.account.id = :accountId
+             and t.status = :status
+             and t.createdAt between :from and :to
+           """)
+    BigDecimal sumAmountByAccountAndStatusAndPeriod(Long accountId, TransactionStatus status,
+                                                    OffsetDateTime from, OffsetDateTime to);
+
+    @Query("""
+           select coalesce(sum(t.netAmount), 0)
+           from Transaction t
+           where t.account.id = :accountId
+             and t.status in :statuses
+           """)
+    BigDecimal sumNetAmountByAccountAndStatuses(Long accountId, List<TransactionStatus> statuses);
+}

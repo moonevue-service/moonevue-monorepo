@@ -18,9 +18,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.moonevue.core.repository"
 })
 public class GatewayApplication {
-
 	public static void main(String[] args) {
 		SpringApplication.run(GatewayApplication.class, args);
 	}
-
 }

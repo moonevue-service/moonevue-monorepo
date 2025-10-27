@@ -1,11 +1,12 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.Severity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
@@ -45,11 +46,10 @@ public class TransactionLog {
     @Column(name = "message", nullable = false, length = 1000)
     private String message;
 
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @ColumnDefault("'INFO'")
     @Column(name = "severity", nullable = false, length = 20)
-    private String severity;
+    private Severity severity = Severity.INFO;
 
     @Column(name = "http_status_code")
     private Integer httpStatusCode;
@@ -59,10 +59,9 @@ public class TransactionLog {
     private String errorCode;
 
     @NotNull
-    @ColumnDefault("'{}'")
     @Column(name = "metadata", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
-    private Map<String, Object> metadata;
+    private Map<String, Object> metadata = Map.of();
 
     @Size(max = 45)
     @Column(name = "ip_address", length = 45)
@@ -72,9 +71,7 @@ public class TransactionLog {
     @Column(name = "user_agent", length = 500)
     private String userAgent;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "event_date", nullable = false)
     private OffsetDateTime eventDate;
-
 }

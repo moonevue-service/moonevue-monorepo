@@ -1,13 +1,15 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.AccountType;
+import com.moonevue.core.enums.BankType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -15,50 +17,57 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "bank_accounts", schema = "public", indexes = {
-        @Index(name = "idx_account_owner", columnList = "owner")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "bank_accounts_number_key", columnNames = {"number"})
-})
+@Table(name = "bank_accounts", schema = "public",
+        indexes = {
+                @Index(name = "idx_account_name", columnList = "name"),
+                @Index(name = "idx_account_contractor", columnList = "contractor_id")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_contractor_account_unique",
+                        columnNames = {"contractor_id", "bank", "cd_agency", "cd_account", "cd_account_digit"})
+        })
 public class BankAccount {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id", nullable = false)
+    @Column(name = "bank_id", nullable = false)
     private Long id;
-
-    @Size(max = 200)
-    @NotNull
-    @Column(name = "owner", nullable = false, length = 200)
-    private String owner;
-
-    @Size(max = 100)
-    @NotNull
-    @Column(name = "number", nullable = false, length = 100)
-    private String number;
-
-    @NotNull
-    @Column(name = "balance", nullable = false, precision = 18, scale = 2)
-    private BigDecimal balance;
-
-    @Size(max = 100)
-    @NotNull
-    @Column(name = "bank", nullable = false, length = 100)
-    private String bank;
-
-    @NotNull
-    @ColumnDefault("true")
-    @Column(name = "active", nullable = false)
-    private Boolean active = false;
-
-    @NotNull
-    @ColumnDefault("now()")
-    @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "contractor_id", nullable = false)
+    private Contractor contractor;
+
+    @Size(max = 200)
+    @NotNull
+    @Column(name = "name", nullable = false, length = 200)
+    private String name;
+
+    @Size(max = 100)
+    @NotNull
+    @Column(name = "cd_agency", nullable = false, length = 100)
+    private String cdAgency;
+
+    @Size(max = 100)
+    @NotNull
+    @Column(name = "cd_account", nullable = false, length = 100)
+    private String cdAccount;
+
+    @Size(max = 10)
+    @Column(name = "cd_account_digit", length = 10)
+    private String cdAccountDigit;
+
+    @Enumerated(EnumType.STRING)
+    @NotNull
+    @Column(name = "bank", nullable = false, length = 100)
+    private BankType bank;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_type", length = 20)
+    private AccountType accountType = AccountType.CHECKING;
+
+    @NotNull
+    @Column(name = "active", nullable = false)
+    private Boolean active = true;
 
     @OneToMany(mappedBy = "bankAccount")
     private Set<BankConfiguration> bankConfigurations = new LinkedHashSet<>();
@@ -66,4 +75,11 @@ public class BankAccount {
     @OneToMany(mappedBy = "account")
     private Set<Transaction> transactions = new LinkedHashSet<>();
 
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }

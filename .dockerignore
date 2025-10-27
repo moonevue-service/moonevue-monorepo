@@ -1,0 +1,13 @@
+# .dockerignore na raiz (quando o build context é ".")
+.git
+.gitignore
+**/target/
+**/.idea/
+**/.vscode/
+**/.DS_Store
+**/.classpath
+**/.project
+**/.settings/
+**/.mvn/wrapper/maven-wrapper.jar
+**/node_modules/
+**/logs/

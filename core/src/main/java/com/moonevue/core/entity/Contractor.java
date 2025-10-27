@@ -1,11 +1,15 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.PersonType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
@@ -15,7 +19,7 @@ import java.util.Set;
 @Setter
 @Entity
 @Table(name = "contractors", schema = "public", uniqueConstraints = {
-        @UniqueConstraint(name = "contractors_cpf_cnpj_key", columnNames = {"cpf_cnpj"})
+        @UniqueConstraint(name = "uk_contractor_cpf_cnpj", columnNames = {"cpf_cnpj"})
 })
 public class Contractor {
     @Id
@@ -32,10 +36,10 @@ public class Contractor {
     @Column(name = "business_name", length = 200)
     private String businessName;
 
-    @Size(max = 2)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @Column(name = "type", nullable = false, length = 2)
-    private String type;
+    @Column(name = "person_type", nullable = false, length = 2)
+    private PersonType personType;
 
     @Size(max = 14)
     @NotNull
@@ -51,27 +55,27 @@ public class Contractor {
     @Column(name = "phone", length = 20)
     private String phone;
 
-    @Size(max = 20)
-    @NotNull
-    @ColumnDefault("'ACTIVE'")
-    @Column(name = "status", nullable = false, length = 20)
-    private String status;
-
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
     @OneToMany(mappedBy = "contractor")
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private Set<BankAccount> bankAccounts = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "contractor")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<BankConfiguration> bankConfigurations = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "contractor")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Client> clients = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "contractor")
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Set<Subscription> subscriptions = new LinkedHashSet<>();
-
 }

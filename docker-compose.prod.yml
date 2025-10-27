@@ -1,0 +1,110 @@
+version: "3.9"
+
+networks:
+  moonevue-net:
+    driver: bridge
+
+volumes:
+  db_data:
+  files:
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-moonevue}
+      POSTGRES_USER: ${POSTGRES_USER:-moonevue}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [moonevue-net]
+    # Em produção real, NÃO exponha a porta do banco publicamente.
+    # ports: ["5432:5432"]
+
+  auth:
+    image: ${AUTH_IMAGE:?defina no .env}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_AUTH:?defina no .env}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?defina no .env}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina no .env}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:?defina no .env}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:true}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:Strict}
+      AUTH_COOKIE_MAX_AGE: ${AUTH_COOKIE_MAX_AGE:-1800}
+      TZ: ${TZ:-America/Sao_Paulo}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [moonevue-net]
+    # Em produção, deixe SEM portas públicas (o gateway chama internamente).
+    # Descomente se precisar acessar direto por fora:
+    # ports: ["8081:8081"]
+
+  gateway:
+    image: ${GATEWAY_IMAGE:?defina no .env}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_GATEWAY:-}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-}
+      AUTH_BASE_URL: http://auth:8081
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
+      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-sid}
+      WEBHOOK_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET:-change-me}
+      TZ: ${TZ:-America/Sao_Paulo}
+    depends_on:
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8080:8080" # Gateway é o único público
+    restart: unless-stopped
+    networks: [moonevue-net]
+
+  finance:
+    image: ${FINANCE_IMAGE:?defina no .env}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_FIN:?defina no .env}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?defina no .env}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina no .env}
+      AUTH_BASE_URL: http://auth:8081
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
+      FINANCE_CRYPTO_SECRET: ${FINANCE_CRYPTO_SECRET:?defina no .env}
+      TZ: ${TZ:-America/Sao_Paulo}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [moonevue-net]
+    # Em produção, deixe SEM porta pública:
+    # ports: ["8082:8082"]
+    # Se finance grava arquivos, monte storage durável (use S3 em prod; volume local abaixo é opcional):
+    volumes:
+      - files:/data/files

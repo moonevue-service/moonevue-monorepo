@@ -1,0 +1,6 @@
+# .dockerignore do módulo gateway (quando o context é "./gateway")
+target/
+.idea/
+.vscode/
+.DS_Store
+logs/

@@ -1,13 +1,16 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.Frequency;
+import com.moonevue.core.enums.SubscriptionStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -47,16 +50,15 @@ public class Subscription {
     @Column(name = "value", nullable = false, precision = 18, scale = 2)
     private BigDecimal value;
 
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
     @Column(name = "frequency", nullable = false, length = 20)
-    private String frequency;
+    private Frequency frequency = Frequency.MONTHLY;
 
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @ColumnDefault("'ACTIVE'")
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private SubscriptionStatus status = SubscriptionStatus.ACTIVE;
 
     @NotNull
     @Column(name = "start_date", nullable = false)
@@ -77,9 +79,8 @@ public class Subscription {
     private String description;
 
     @NotNull
-    @ColumnDefault("true")
     @Column(name = "auto_renew", nullable = false)
-    private Boolean autoRenew = false;
+    private Boolean autoRenew = true;
 
     @Column(name = "trial_days")
     private Integer trialDays;
@@ -87,11 +88,11 @@ public class Subscription {
     @Column(name = "trial_end_date")
     private LocalDate trialEndDate;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
@@ -104,5 +105,4 @@ public class Subscription {
 
     @OneToMany(mappedBy = "subscription")
     private Set<Transaction> transactions = new LinkedHashSet<>();
-
 }

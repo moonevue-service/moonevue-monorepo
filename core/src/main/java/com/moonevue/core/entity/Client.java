@@ -1,11 +1,16 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.ClientStatus;
+import com.moonevue.core.value.Address;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
@@ -30,6 +35,7 @@ public class Client {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "contractor_id", nullable = false)
     private Contractor contractor;
 
@@ -52,54 +58,22 @@ public class Client {
     @Column(name = "phone", length = 20)
     private String phone;
 
-    @Size(max = 200)
-    @Column(name = "address_street", length = 200)
-    private String addressStreet;
+    @Embedded
+    private Address address = new Address();
 
-    @Size(max = 20)
-    @Column(name = "address_number", length = 20)
-    private String addressNumber;
-
-    @Size(max = 100)
-    @Column(name = "address_complement", length = 100)
-    private String addressComplement;
-
-    @Size(max = 100)
-    @Column(name = "address_neighborhood", length = 100)
-    private String addressNeighborhood;
-
-    @Size(max = 100)
-    @Column(name = "address_city", length = 100)
-    private String addressCity;
-
-    @Size(max = 2)
-    @Column(name = "address_state", length = 2)
-    private String addressState;
-
-    @Size(max = 10)
-    @Column(name = "address_zip_code", length = 10)
-    private String addressZipCode;
-
-    @Size(max = 50)
-    @ColumnDefault("'Brasil'")
-    @Column(name = "address_country", length = 50)
-    private String addressCountry;
-
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @ColumnDefault("'ACTIVE'")
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private ClientStatus status = ClientStatus.ACTIVE;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
     @OneToMany(mappedBy = "client")
     private Set<Subscription> subscriptions = new LinkedHashSet<>();
-
 }

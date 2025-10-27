@@ -1,13 +1,16 @@
 package com.moonevue.core.entity;
 
+import com.moonevue.core.enums.TransactionStatus;
+import com.moonevue.core.enums.TransactionType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -44,16 +47,15 @@ public class Transaction {
     @Column(name = "amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal amount;
 
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
     @Column(name = "type", nullable = false, length = 20)
-    private String type;
+    private TransactionType type = TransactionType.CHARGE;
 
-    @Size(max = 20)
+    @Enumerated(EnumType.STRING)
     @NotNull
-    @ColumnDefault("'PENDING'")
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private TransactionStatus status = TransactionStatus.PENDING;
 
     @Size(max = 500)
     @Column(name = "description", length = 500)
@@ -63,15 +65,23 @@ public class Transaction {
     @Column(name = "external_reference", length = 200)
     private String externalReference;
 
-    @NotNull
-    @ColumnDefault("now()")
+    @Column(name = "fee_amount", precision = 18, scale = 2)
+    private BigDecimal feeAmount;
+
+    @Column(name = "net_amount", precision = 18, scale = 2)
+    private BigDecimal netAmount;
+
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    @OneToMany(mappedBy = "transaction")
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Installment> installments = new LinkedHashSet<>();
 
-    @OneToMany(mappedBy = "transaction")
+    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<TransactionLog> transactionLogs = new LinkedHashSet<>();
-
 }

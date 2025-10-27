@@ -1,0 +1,115 @@
+networks:
+  moonevue-net:
+    driver: bridge
+
+volumes:
+  db_data:
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: moonevue-postgres
+    environment:
+      POSTGRES_DB: moonevue
+      POSTGRES_USER: moonevue
+      POSTGRES_PASSWORD: moone_data_vue
+      TZ: America/Sao_Paulo
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U moonevue -d moonevue" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  auth:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile.dev
+    environment:
+      SPRING_PROFILES_ACTIVE: "dev,docker"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/moonevue
+      SPRING_DATASOURCE_USERNAME: moonevue
+      SPRING_DATASOURCE_PASSWORD: moone_data_vue
+      AUTH_INTERNAL_TOKEN: "super-secret"
+      AUTH_COOKIE_DOMAIN: "localhost"
+      AUTH_COOKIE_SECURE: "false"
+      AUTH_COOKIE_SAMESITE: "Lax"
+    ports: [ "8081:8081", "5007:5005" ]
+    volumes:
+      - .:/app/moonevue
+      - ~/.m2:/root/.m2
+    working_dir: /app/moonevue/auth
+    command: >
+      sh -lc 'unset JAVA_TOOL_OPTIONS;
+      mvn -q -DskipTests spring-boot:run
+      -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.dev
+    environment:
+      SPRING_PROFILES_ACTIVE: "dev,docker"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/moonevue
+      SPRING_DATASOURCE_USERNAME: moonevue
+      SPRING_DATASOURCE_PASSWORD: moone_data_vue
+      AUTH_BASE_URL: http://auth:8081
+      AUTH_INTERNAL_TOKEN: "super-secret"
+    ports: [ "8080:8080", "5005:5005" ]
+    volumes:
+      - .:/app/moonevue
+      - ~/.m2:/root/.m2
+    working_dir: /app/moonevue/gateway
+    command: >
+      sh -lc 'unset JAVA_TOOL_OPTIONS;
+      mvn -q -DskipTests spring-boot:run
+      -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"'
+    depends_on:
+      auth:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  finance:
+    build:
+      context: ./finance
+      dockerfile: Dockerfile.dev
+    environment:
+      SPRING_PROFILES_ACTIVE: "dev,docker"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/moonevue
+      SPRING_DATASOURCE_USERNAME: moonevue
+      SPRING_DATASOURCE_PASSWORD: moone_data_vue
+      AUTH_BASE_URL: http://auth:8081
+      AUTH_INTERNAL_TOKEN: "super-secret"
+    ports: [ "8082:8080", "5006:5005" ]
+    volumes:
+      - .:/app/moonevue
+      - ~/.m2:/root/.m2
+    working_dir: /app/moonevue/finance
+    command: >
+      sh -lc 'unset JAVA_TOOL_OPTIONS;
+      mvn -q -DskipTests spring-boot:run
+      -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"'
+    depends_on:
+      auth:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - moonevue-net
