@@ -1,40 +1,27 @@
 package com.moonevue.auth.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter @Setter
 public class RegisterRequest {
-    private String username;
-    private String password;
-    private String confirmPassword;
+
+    // Dados do Tenant (empresa)
+    @NotBlank
+    private String tenantName;
+
+    @NotBlank
+    private String tenantDocument; // CNPJ/CPF (normalizar no service, se necessário)
+
+    // Dados do usuário (admin inicial)
+    @Email @NotBlank
     private String email;
 
-    public String getUsername() {
-        return username;
-    }
+    @NotBlank
+    private String password;
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getConfirmPassword() {
-        return confirmPassword;
-    }
-
-    public void setConfirmPassword(String confirmPassword) {
-        this.confirmPassword = confirmPassword;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
+    @NotBlank
+    private String confirmPassword;
 }

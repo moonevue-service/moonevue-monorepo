@@ -11,7 +11,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/contractors/{contractorId}/bank-accounts")
+@RequestMapping("/api/tenant/{contractorId}/bank-account")
 public class BankAccountController {
 
     private final BankAccountService bankAccountService;
@@ -21,7 +21,7 @@ public class BankAccountController {
                                                       @Valid @RequestBody BankAccountRequest req,
                                                       UriComponentsBuilder uriBuilder) {
         var resp = bankAccountService.create(contractorId, req);
-        var uri = uriBuilder.path("/api/contractors/{contractorId}/bank-accounts/{id}")
+        var uri = uriBuilder.path("/api/tenant/{contractorId}/bank-account/{id}")
                 .buildAndExpand(contractorId, resp.id()).toUri();
         return ResponseEntity.created(uri).body(resp);
     }

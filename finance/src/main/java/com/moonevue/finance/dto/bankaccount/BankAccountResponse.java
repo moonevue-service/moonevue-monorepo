@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 
 public record BankAccountResponse(
         Long id,
-        Long contractorId,
+        Long tenantId,
         String name,
         String cdAgency,
         String cdAccount,
@@ -22,7 +22,7 @@ public record BankAccountResponse(
     public static BankAccountResponse from(BankAccount b) {
         return new BankAccountResponse(
                 b.getId(),
-                b.getContractor().getId(),
+                b.getTenant().getId(),
                 b.getName(),
                 b.getCdAgency(),
                 b.getCdAccount(),

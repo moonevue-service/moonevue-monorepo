@@ -17,14 +17,13 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "bank_accounts", schema = "public",
+@Table(name = "bank_accounts",
         indexes = {
-                @Index(name = "idx_account_name", columnList = "name"),
-                @Index(name = "idx_account_contractor", columnList = "contractor_id")
+                @Index(name = "idx_account_tenant", columnList = "tenant_id")
         },
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_contractor_account_unique",
-                        columnNames = {"contractor_id", "bank", "cd_agency", "cd_account", "cd_account_digit"})
+                @UniqueConstraint(name = "uk_tenant_account_unique",
+                        columnNames = {"tenant_id", "bank", "cd_agency", "cd_account", "cd_account_digit"})
         })
 public class BankAccount {
     @Id
@@ -34,8 +33,8 @@ public class BankAccount {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "contractor_id", nullable = false)
-    private Contractor contractor;
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @Size(max = 200)
     @NotNull
@@ -72,8 +71,11 @@ public class BankAccount {
     @OneToMany(mappedBy = "bankAccount")
     private Set<BankConfiguration> bankConfigurations = new LinkedHashSet<>();
 
-    @OneToMany(mappedBy = "account")
+    @OneToMany(mappedBy = "bankAccount")
     private Set<Transaction> transactions = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "bankAccount")
+    private Set<Subscription> subscriptions = new LinkedHashSet<>();
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)

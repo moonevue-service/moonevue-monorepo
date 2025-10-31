@@ -5,23 +5,22 @@ import com.moonevue.core.enums.BankType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
-@Repository
 public interface BankAccountRepository extends JpaRepository<BankAccount, Long> {
 
-    List<BankAccount> findByContractorId(Long contractorId);
+    // Scoping por tenant
+    List<BankAccount> findByTenantId(Long tenantId);
+    Page<BankAccount> findByTenantId(Long tenantId, Pageable pageable);
+    Page<BankAccount> findByTenantIdAndActiveTrue(Long tenantId, Pageable pageable);
+    Optional<BankAccount> findByIdAndTenantId(Long id, Long tenantId);
 
-    Page<BankAccount> findByContractorId(Long contractorId, Pageable pageable);
+    // Unicidade da conta bancária por tenant
+    boolean existsByTenantIdAndBankAndCdAgencyAndCdAccountAndCdAccountDigit(
+            Long tenantId, BankType bank, String cdAgency, String cdAccount, String cdAccountDigit);
 
-    Page<BankAccount> findByContractorIdAndActiveTrue(Long contractorId, Pageable pageable);
-
-    boolean existsByContractorIdAndBankAndCdAgencyAndCdAccountAndCdAccountDigit(
-            Long contractorId, BankType bank, String cdAgency, String cdAccount, String cdAccountDigit);
-
-    Optional<BankAccount> findByContractorIdAndBankAndCdAgencyAndCdAccountAndCdAccountDigit(
-            Long contractorId, BankType bank, String cdAgency, String cdAccount, String cdAccountDigit);
+    Optional<BankAccount> findByTenantIdAndBankAndCdAgencyAndCdAccountAndCdAccountDigit(
+            Long tenantId, BankType bank, String cdAgency, String cdAccount, String cdAccountDigit);
 }

@@ -1,6 +1,7 @@
 package com.moonevue.auth.service;
 
 import com.moonevue.core.entity.Role;
+import com.moonevue.core.entity.Tenant;
 import com.moonevue.core.entity.User;
 import com.moonevue.core.repository.RoleRepository;
 import com.moonevue.core.repository.UserRepository;
@@ -21,18 +22,19 @@ public class UserService {
     private final PasswordEncoder encoder;
 
     @Transactional
-    public User createUser(String email, String rawPassword) {
+    public User createUser(Tenant tenant, String email, String rawPassword) {
         var normalized = email.trim().toLowerCase();
         if (users.findByEmailIgnoreCase(normalized).isPresent()) {
             throw new DataIntegrityViolationException("email already exists");
         }
 
         var user = new User();
+        user.setTenant(tenant);
         user.setEmail(normalized);
         user.setPasswordHash(encoder.encode(rawPassword));
         user.setEnabled(true);
 
-        // garante ROLE_USER
+        // Garante papel padrão
         var roleUser = roles.findByName("ROLE_USER")
                 .orElseGet(() -> {
                     var r = new Role();

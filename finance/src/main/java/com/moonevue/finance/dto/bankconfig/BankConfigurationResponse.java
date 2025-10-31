@@ -8,7 +8,7 @@ import java.util.Map;
 
 public record BankConfigurationResponse(
         Long id,
-        Long contractorId,
+        Long tenantId,
         Long bankAccountId,
         Environment environment,
         Boolean isActive,
@@ -23,7 +23,7 @@ public record BankConfigurationResponse(
         String masked = bc.getCertificatePath() == null ? null : bc.getCertificatePath().replaceAll("(?s).+?([^/\\\\]+)$", "***$1");
         return new BankConfigurationResponse(
                 bc.getId(),
-                bc.getContractor().getId(),
+                bc.getTenant().getId(),
                 bc.getBankAccount().getId(),
                 bc.getEnvironment(),
                 bc.getIsActive(),

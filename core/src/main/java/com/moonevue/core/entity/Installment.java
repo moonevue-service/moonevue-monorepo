@@ -18,19 +18,28 @@ import java.time.OffsetDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "installments", schema = "public", indexes = {
-        @Index(name = "idx_installment_number", columnList = "transaction_id, installment_number"),
-        @Index(name = "idx_installment_transaction", columnList = "transaction_id"),
-        @Index(name = "idx_installment_due_date", columnList = "due_date"),
-        @Index(name = "idx_installment_status", columnList = "status")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_tx_installment_unique", columnNames = {"transaction_id", "installment_number"})
-})
+@Table(name = "installments",
+        indexes = {
+                @Index(name = "idx_installment_tenant", columnList = "tenant_id"),
+                @Index(name = "idx_installment_number", columnList = "transaction_id, installment_number"),
+                @Index(name = "idx_installment_transaction", columnList = "transaction_id"),
+                @Index(name = "idx_installment_due_date", columnList = "due_date"),
+                @Index(name = "idx_installment_status", columnList = "status")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_tx_installment_unique", columnNames = {"transaction_id", "installment_number"})
+        }
+)
 public class Installment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "installment_id", nullable = false)
     private Long id;
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

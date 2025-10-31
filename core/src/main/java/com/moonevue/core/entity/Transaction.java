@@ -20,12 +20,15 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "transactions", schema = "public", indexes = {
-        @Index(name = "idx_tx_account_id", columnList = "account_id"),
-        @Index(name = "idx_tx_subscription", columnList = "subscription_id"),
-        @Index(name = "idx_tx_status", columnList = "status"),
-        @Index(name = "idx_tx_created_at", columnList = "created_at")
-})
+@Table(name = "transactions",
+        indexes = {
+                @Index(name = "idx_tx_tenant", columnList = "tenant_id"),
+                @Index(name = "idx_tx_account_id", columnList = "account_id"),
+                @Index(name = "idx_tx_subscription", columnList = "subscription_id"),
+                @Index(name = "idx_tx_status", columnList = "status"),
+                @Index(name = "idx_tx_created_at", columnList = "created_at")
+        }
+)
 public class Transaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,14 +37,23 @@ public class Transaction {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "account_id", nullable = false)
-    private BankAccount account;
+    private BankAccount bankAccount;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.SET_NULL)
     @JoinColumn(name = "subscription_id")
     private Subscription subscription;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invoice_id", unique = true)
+    private Invoice invoice;
 
     @NotNull
     @Column(name = "amount", nullable = false, precision = 18, scale = 2)

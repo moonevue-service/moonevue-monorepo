@@ -19,9 +19,9 @@ public class CertificateStorageService {
 
     private final StorageProperties storageProperties;
 
-    public String storeCertificate(Long contractorId, Long configurationId, MultipartFile file) throws IOException {
+    public String storeCertificate(Long tenantId, Long configurationId, MultipartFile file) throws IOException {
         String baseDir = storageProperties.getCertsDir();
-        Path dir = Paths.get(baseDir, contractorId.toString(), configurationId.toString()).toAbsolutePath().normalize();
+        Path dir = Paths.get(baseDir, tenantId.toString(), configurationId.toString()).toAbsolutePath().normalize();
         Files.createDirectories(dir);
 
         String original = StringUtils.cleanPath(file.getOriginalFilename() == null ? "cert.p12" : file.getOriginalFilename());

@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.util.List;
@@ -27,21 +28,38 @@ public class SessionValidationFilter extends OncePerRequestFilter {
     private final String cookieName;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = new UrlPathHelper().getPathWithinApplication(request);
+        return path.startsWith("/webhooks/")
+                || path.startsWith("/actuator/")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/v3/api-docs");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
         // bypass para endpoints públicos do gateway (ajuste conforme necessário)
         var path = req.getRequestURI();
-        if (path.startsWith("/actuator") || path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs"))
-        { chain.doFilter(req, res); return; }
+        if (path.startsWith("/actuator") || path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs")) {
+            chain.doFilter(req, res);
+            return;
+        }
 
         String sid = null;
         if (req.getCookies() != null) {
             for (Cookie c : req.getCookies()) {
-                if (cookieName.equals(c.getName())) { sid = c.getValue(); break; }
+                if (cookieName.equals(c.getName())) {
+                    sid = c.getValue();
+                    break;
+                }
             }
         }
-        if (!StringUtils.hasText(sid)) { res.setStatus(HttpStatus.UNAUTHORIZED.value()); return; }
+        if (!StringUtils.hasText(sid)) {
+            res.setStatus(HttpStatus.UNAUTHORIZED.value());
+            return;
+        }
 
         // Introspect
         var headers = new HttpHeaders();
@@ -53,21 +71,45 @@ public class SessionValidationFilter extends OncePerRequestFilter {
         try {
             resp = rest.exchange(authBaseUrl + "/auth/introspect", HttpMethod.GET, entity, Map.class);
         } catch (Exception e) {
-            res.setStatus(HttpStatus.UNAUTHORIZED.value()); return;
+            res.setStatus(HttpStatus.UNAUTHORIZED.value());
+            return;
         }
         if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-            res.setStatus(HttpStatus.UNAUTHORIZED.value()); return;
+            res.setStatus(HttpStatus.UNAUTHORIZED.value());
+            return;
         }
 
         var body = resp.getBody();
         var email = String.valueOf(body.get("email"));
         var roles = (List<String>) body.get("roles");
+        var tenantIdObj = body.get("tenantId");
+        Long tenantId = null;
+        if (tenantIdObj instanceof Number n) tenantId = n.longValue();
+
+        var userIdObj = body.get("userId");
+        Long userId = null;
+        if (userIdObj instanceof Number n) userId = n.longValue();
+
+        var authorities = roles.stream().map(SimpleGrantedAuthority::new).toList();
         var auth = new AbstractAuthenticationToken(
                 roles.stream().map(SimpleGrantedAuthority::new).toList()) {
-            @Override public Object getCredentials() { return ""; }
-            @Override public Object getPrincipal() { return email; }
-            @Override public boolean isAuthenticated() { return true; }
+            @Override
+            public Object getCredentials() {
+                return "";
+            }
+
+            @Override
+            public Object getPrincipal() {
+                return email;
+            }
+
+            @Override
+            public boolean isAuthenticated() {
+                return true;
+            }
         };
+        // Disponibiliza tenantId/userId aos controllers via details
+        auth.setDetails(Map.of("tenantId", tenantId, "userId", userId));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         // Tenta renovar (touch). Se vier novo Set-Cookie, repassa ao cliente
@@ -77,7 +119,13 @@ public class SessionValidationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(setCookie)) {
                 res.setHeader(HttpHeaders.SET_COOKIE, setCookie);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
+
+        // Também disponibiliza o tenantId como atributo da request (útil para interceptors)
+        if (tenantId != null) {
+            req.setAttribute("X-Tenant-Id", tenantId);
+        }
 
         chain.doFilter(req, res);
     }

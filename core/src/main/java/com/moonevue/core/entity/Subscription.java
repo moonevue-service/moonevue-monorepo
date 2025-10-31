@@ -21,13 +21,15 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "subscriptions", schema = "public", indexes = {
-        @Index(name = "idx_subscription_contractor", columnList = "contractor_id"),
-        @Index(name = "idx_subscription_client", columnList = "client_id"),
-        @Index(name = "idx_subscription_status", columnList = "status"),
-        @Index(name = "idx_subscription_dates", columnList = "start_date, end_date"),
-        @Index(name = "idx_subscription_next_billing", columnList = "next_billing_date")
-})
+@Table(name = "subscriptions",
+        indexes = {
+                @Index(name = "idx_subscription_tenant", columnList = "tenant_id"),
+                @Index(name = "idx_subscription_client", columnList = "client_id"),
+                @Index(name = "idx_subscription_status", columnList = "status"),
+                @Index(name = "idx_subscription_dates", columnList = "start_date, end_date"),
+                @Index(name = "idx_subscription_next_billing", columnList = "next_billing_date")
+        }
+)
 public class Subscription {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,15 +38,20 @@ public class Subscription {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    @JoinColumn(name = "contractor_id", nullable = false)
-    private Contractor contractor;
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "client_id", nullable = false)
     private Client client;
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JoinColumn(name = "account_id", nullable = false)
+    private BankAccount bankAccount;
 
     @NotNull
     @Column(name = "value", nullable = false, precision = 18, scale = 2)

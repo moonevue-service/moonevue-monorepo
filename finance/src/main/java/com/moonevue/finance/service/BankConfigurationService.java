@@ -1,15 +1,13 @@
 package com.moonevue.finance.service;
 
-import com.moonevue.finance.dto.bankconfig.BankConfigurationRequest;
-import com.moonevue.finance.dto.bankconfig.BankConfigurationResponse;
-import com.moonevue.finance.dto.bankconfig.BankConfigurationUpdateRequest;
-import com.moonevue.finance.dto.bankconfig.CertificateUploadResponse;
-import com.moonevue.finance.exception.NotFoundException;
 import com.moonevue.core.entity.BankAccount;
 import com.moonevue.core.entity.BankConfiguration;
-import com.moonevue.core.entity.Contractor;
+import com.moonevue.core.entity.Tenant;
 import com.moonevue.core.enums.Environment;
+import com.moonevue.core.repository.BankAccountRepository;
 import com.moonevue.core.repository.BankConfigurationRepository;
+import com.moonevue.finance.dto.bankconfig.*;
+import com.moonevue.finance.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,45 +19,43 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class BankConfigurationService {
 
-    private final BankConfigurationRepository bankConfigurationRepository;
-    private final ContractorService contractorService;
-    private final BankAccountService bankAccountService;
+    private final BankConfigurationRepository bankConfigs;
+    private final BankAccountRepository bankAccounts;
     private final CertificateStorageService certificateStorageService;
 
     @Transactional
-    public BankConfigurationResponse create(Long contractorId, Long bankAccountId, BankConfigurationRequest req) {
-        Contractor contractor = contractorService.getEntity(contractorId);
-        BankAccount bankAccount = bankAccountService.getEntity(bankAccountId);
-        if (!bankAccount.getContractor().getId().equals(contractorId)) {
-            throw new NotFoundException("Bank account does not belong to contractor");
-        }
+    public BankConfigurationResponse create(Long tenantId, Long bankAccountId, BankConfigurationRequest req) {
+        BankAccount bankAccount = bankAccounts.findByIdAndTenantId(bankAccountId, tenantId)
+                .orElseThrow(() -> new NotFoundException("Bank account not found for tenant"));
 
         Environment env = req.environment();
-        bankConfigurationRepository.findByContractorIdAndBankAccountIdAndEnvironment(contractorId, bankAccountId, env)
+        bankConfigs.findByTenantIdAndBankAccountIdAndEnvironment(tenantId, bankAccountId, env)
                 .ifPresent(existing -> { throw new IllegalStateException("Configuration already exists for this environment"); });
 
         BankConfiguration cfg = new BankConfiguration();
-        cfg.setContractor(contractor);
+        var t = new Tenant(); t.setId(tenantId);
+        cfg.setTenant(t);
         cfg.setBankAccount(bankAccount);
         cfg.setEnvironment(env);
         cfg.setIsActive(req.isActive() == null ? Boolean.TRUE : req.isActive());
         cfg.setWebhookUrl(req.webhookUrl());
         cfg.setExtraConfig(req.extraConfig() == null ? java.util.Map.of() : req.extraConfig());
 
-        bankConfigurationRepository.save(cfg);
+        bankConfigs.save(cfg);
         return BankConfigurationResponse.from(cfg);
     }
 
     @Transactional(readOnly = true)
-    public BankConfiguration getEntity(Long id) {
-        return bankConfigurationRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Bank configuration not found: " + id));
+    public BankConfiguration getEntity(Long tenantId, Long configId) {
+        return bankConfigs.findById(configId)
+                .filter(cfg -> cfg.getTenant().getId().equals(tenantId))
+                .orElseThrow(() -> new NotFoundException("Bank configuration not found: " + configId));
     }
 
     @Transactional
-    public BankConfigurationResponse update(Long contractorId, Long bankAccountId, Long configId, BankConfigurationUpdateRequest req) {
-        BankConfiguration cfg = getEntity(configId);
-        validateOwnership(contractorId, bankAccountId, cfg);
+    public BankConfigurationResponse update(Long tenantId, Long bankAccountId, Long configId, BankConfigurationUpdateRequest req) {
+        BankConfiguration cfg = getEntity(tenantId, configId);
+        validateOwnership(tenantId, bankAccountId, cfg);
 
         if (req.isActive() != null) cfg.setIsActive(req.isActive());
         if (req.webhookUrl() != null) cfg.setWebhookUrl(req.webhookUrl());
@@ -69,12 +65,12 @@ public class BankConfigurationService {
     }
 
     @Transactional
-    public CertificateUploadResponse uploadCertificate(Long contractorId, Long bankAccountId, Long configId,
+    public CertificateUploadResponse uploadCertificate(Long tenantId, Long bankAccountId, Long configId,
                                                        MultipartFile file, String password) throws IOException {
-        BankConfiguration cfg = getEntity(configId);
-        validateOwnership(contractorId, bankAccountId, cfg);
+        BankConfiguration cfg = getEntity(tenantId, configId);
+        validateOwnership(tenantId, bankAccountId, cfg);
 
-        String path = certificateStorageService.storeCertificate(contractorId, configId, file);
+        String path = certificateStorageService.storeCertificate(tenantId, configId, file);
         cfg.setCertificatePath(path);
         cfg.setCertificatePassword(password);
 
@@ -82,9 +78,9 @@ public class BankConfigurationService {
         return new CertificateUploadResponse(cfg.getId(), masked);
     }
 
-    private void validateOwnership(Long contractorId, Long bankAccountId, BankConfiguration cfg) {
-        if (!cfg.getContractor().getId().equals(contractorId)) {
-            throw new NotFoundException("Configuration does not belong to contractor");
+    private void validateOwnership(Long tenantId, Long bankAccountId, BankConfiguration cfg) {
+        if (!cfg.getTenant().getId().equals(tenantId)) {
+            throw new NotFoundException("Configuration does not belong to tenant");
         }
         if (!cfg.getBankAccount().getId().equals(bankAccountId)) {
             throw new NotFoundException("Configuration does not belong to bank account");

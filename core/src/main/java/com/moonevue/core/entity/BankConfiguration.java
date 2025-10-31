@@ -17,12 +17,8 @@ import java.util.Map;
 @Getter
 @Setter
 @Entity
-@Table(name = "bank_configurations", schema = "public", indexes = {
-        @Index(name = "idx_bank_config_contractor", columnList = "contractor_id"),
-        @Index(name = "idx_bank_config_environment", columnList = "environment"),
-        @Index(name = "idx_bank_config_active", columnList = "is_active")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_contractor_bank_env", columnNames = {"contractor_id", "bank_account_id", "environment"})
+@Table(name = "bank_configurations", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_tenant_bank_env", columnNames = {"tenant_id", "bank_account_id", "environment"})
 })
 public class BankConfiguration {
     @Id
@@ -32,14 +28,15 @@ public class BankConfiguration {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "contractor_id", nullable = false)
-    private Contractor contractor;
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "bank_account_id", nullable = false)
     private BankAccount bankAccount;
 
+    // ... (o resto da entidade continua igual: environment, extraConfig, etc.)
     @Enumerated(EnumType.STRING)
     @NotNull
     @Column(name = "environment", nullable = false, length = 20)
@@ -69,7 +66,6 @@ public class BankConfiguration {
     @Column(name = "last_sync_at")
     private OffsetDateTime lastSyncAt;
 
-    // Recomenda-se armazenar certificados/senhas em cofre (ex.: HashiCorp Vault, AWS Secrets Manager)
     @Column(name = "certificate_path")
     private String certificatePath;
 

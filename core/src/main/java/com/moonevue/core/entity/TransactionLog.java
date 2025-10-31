@@ -18,17 +18,25 @@ import java.util.Map;
 @Getter
 @Setter
 @Entity
-@Table(name = "transaction_logs", schema = "public", indexes = {
-        @Index(name = "idx_tx_log_transaction", columnList = "transaction_id"),
-        @Index(name = "idx_tx_log_event_type", columnList = "event_type"),
-        @Index(name = "idx_tx_log_severity", columnList = "severity"),
-        @Index(name = "idx_tx_log_event_date", columnList = "event_date")
-})
+@Table(name = "transaction_logs",
+        indexes = {
+                @Index(name = "idx_tx_log_tenant", columnList = "tenant_id"),
+                @Index(name = "idx_tx_log_transaction", columnList = "transaction_id"),
+                @Index(name = "idx_tx_log_event_type", columnList = "event_type"),
+                @Index(name = "idx_tx_log_severity", columnList = "severity"),
+                @Index(name = "idx_tx_log_event_date", columnList = "event_date")
+        }
+)
 public class TransactionLog {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "log_id", nullable = false)
     private Long id;
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -59,8 +67,8 @@ public class TransactionLog {
     private String errorCode;
 
     @NotNull
-    @Column(name = "metadata", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metadata", nullable = false)
     private Map<String, Object> metadata = Map.of();
 
     @Size(max = 45)

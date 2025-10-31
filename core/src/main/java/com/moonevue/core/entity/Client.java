@@ -8,8 +8,6 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.OnDelete;
-import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
@@ -19,13 +17,8 @@ import java.util.Set;
 @Getter
 @Setter
 @Entity
-@Table(name = "clients", schema = "public", indexes = {
-        @Index(name = "idx_client_contractor", columnList = "contractor_id"),
-        @Index(name = "idx_client_cpf_cnpj", columnList = "cpf_cnpj"),
-        @Index(name = "idx_client_email", columnList = "email"),
-        @Index(name = "idx_client_status", columnList = "status")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_contractor_client_cpf_cnpj", columnNames = {"contractor_id", "cpf_cnpj"})
+@Table(name = "clients", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_tenant_client_cpf_cnpj", columnNames = {"tenant_id", "cpf_cnpj"})
 })
 public class Client {
     @Id
@@ -35,9 +28,8 @@ public class Client {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    @JoinColumn(name = "contractor_id", nullable = false)
-    private Contractor contractor;
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
     @Size(max = 200)
     @NotNull
