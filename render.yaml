@@ -1,0 +1,23 @@
+# databases:
+#   - name: moonevue-db
+#     databaseName: moonevue
+#     plan: free
+#     type: postgres
+
+services:
+  - type: web
+    name: moonevue-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: "prod"
+      - key: PORT
+        value: "8080"
+      - key: SPRING_DATASOURCE_URL
+        value: "${DATABASE_URL}?sslmode=require"
+      - key: SPRING_DATASOURCE_USERNAME
+        value: "${DATABASE_USERNAME}"
+      - key: SPRING_DATASOURCE_PASSWORD
+        value: "${DATABASE_PASSWORD}"
