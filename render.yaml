@@ -12,7 +12,6 @@ services:
     healthCheckPath: /actuator/health
     # Fix port binding
     port: 8080
-    env: docker
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
