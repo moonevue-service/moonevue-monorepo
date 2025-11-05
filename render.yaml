@@ -10,20 +10,17 @@ services:
     runtime: docker
     plan: free
     healthCheckPath: /actuator/health
-    # Add port configuration
+    # Fix port binding
     port: 8080
+    env: docker
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: PORT
         value: 8080
-      # Database configuration
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME
         sync: false
       - key: SPRING_DATASOURCE_PASSWORD
         sync: false
-      # Add schema generation for first deploy
-      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
-        value: update
