@@ -4,6 +4,6 @@ CREATE TABLE audit_logs (
     entity_type VARCHAR(255),
     action VARCHAR(50),
     modified_by VARCHAR(255),
-    modified_at TIMESTAMP,
+    modified_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     details JSONB
 );
