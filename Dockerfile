@@ -17,5 +17,8 @@ RUN ./mvnw clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
 VOLUME /tmp
+# expose port for clarity (optional)
+EXPOSE 8080
 COPY --from=build /workspace/app/gateway/target/*.jar app.jar
-ENTRYPOINT ["java","-jar","/app.jar"]
+# use shell form to expand PORT env var
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Dserver.port=${PORT:-8080} -jar /app.jar"]
