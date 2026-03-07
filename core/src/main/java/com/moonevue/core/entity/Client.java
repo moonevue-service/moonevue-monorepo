@@ -65,7 +65,4 @@ public class Client {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
-
-    @OneToMany(mappedBy = "client")
-    private Set<Subscription> subscriptions = new LinkedHashSet<>();
 }

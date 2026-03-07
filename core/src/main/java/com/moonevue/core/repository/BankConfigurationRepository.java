@@ -16,12 +16,6 @@ public interface BankConfigurationRepository extends JpaRepository<BankConfigura
     Optional<BankConfiguration> findByTenantIdAndBankAccountIdAndEnvironment(
             Long tenantId, Long bankAccountId, Environment environment);
 
-    List<BankConfiguration> findByTenantIdAndIsActiveTrue(Long tenantId);
-
-    List<BankConfiguration> findByBankAccountIdAndIsActiveTrue(Long bankAccountId);
-
-    Page<BankConfiguration> findByEnvironment(Environment environment, Pageable pageable);
-
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update BankConfiguration b set b.lastSyncAt = :when where b.id = :id")
     int touchLastSync(@Param("id") Long id, @Param("when") OffsetDateTime when);

@@ -1,23 +1,24 @@
-app:
-  storage:
-    certs-dir: storage/certs
+storage:
+  certs-dir: ${STORAGE_CERTS_DIR:/data/certs}
 
 server:
   port: 8082
   forward-headers-strategy: framework
 
+auth:
+  base-url: ${AUTH_BASE_URL:http://auth:8081}
+  internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
+  cookie-name: ${AUTH_COOKIE_NAME:sid}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
 spring:
   application:
     name: finance
-  auth:
-    base-url: ${AUTH_BASE_URL:http://auth:8081}
-    internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
-    cookie-name: ${AUTH_COOKIE_NAME:sid}
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
     username: ${SPRING_DATASOURCE_USERNAME:moonevue}
@@ -48,5 +49,6 @@ spring:
       idle-timeout: 60000
       connection-timeout: 30000
 
+# Porta mantida em 8082 para consistência com docker-compose
 server:
-  port: 8080
+  port: 8082

@@ -46,15 +46,6 @@ public class Transaction {
     @JoinColumn(name = "account_id", nullable = false)
     private BankAccount bankAccount;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    @JoinColumn(name = "subscription_id")
-    private Subscription subscription;
-
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "invoice_id", unique = true)
-    private Invoice invoice;
-
     @NotNull
     @Column(name = "amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal amount;
@@ -90,9 +81,6 @@ public class Transaction {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
-
-    @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Installment> installments = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "transaction", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<TransactionLog> transactionLogs = new LinkedHashSet<>();

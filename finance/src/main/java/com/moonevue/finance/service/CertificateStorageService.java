@@ -20,8 +20,17 @@ public class CertificateStorageService {
     private final StorageProperties storageProperties;
 
     public String storeCertificate(Long tenantId, Long configurationId, MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo de certificado vazio");
+        }
+
         String baseDir = storageProperties.getCertsDir();
-        Path dir = Paths.get(baseDir, tenantId.toString(), configurationId.toString()).toAbsolutePath().normalize();
+        if (!StringUtils.hasText(baseDir)) {
+            throw new IllegalStateException("Diretório base para certificados não configurado (storage.certs-dir).");
+        }
+
+        Path dir = Paths.get(baseDir, tenantId.toString(), configurationId.toString())
+                .toAbsolutePath().normalize();
         Files.createDirectories(dir);
 
         String original = StringUtils.cleanPath(file.getOriginalFilename() == null ? "cert.p12" : file.getOriginalFilename());
@@ -34,10 +43,12 @@ public class CertificateStorageService {
             Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        // Restrição de permissão básica (Unix-like). Ignorado se não suportado.
+        // Permissões (Unix). Ignora em SO que não suporta POSIX.
         try {
             Files.setPosixFilePermissions(dest, PosixFilePermissions.fromString("rw-------"));
-        } catch (UnsupportedOperationException ignored) { }
+        } catch (UnsupportedOperationException ignored) {
+            System.out.println(ignored.getMessage());
+        }
 
         return dest.toString();
     }

@@ -13,7 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.security.KeyStore;
+import java.time.Instant;
+import java.util.Enumeration;
 
 @Service
 @RequiredArgsConstructor
@@ -70,12 +74,31 @@ public class BankConfigurationService {
         BankConfiguration cfg = getEntity(tenantId, configId);
         validateOwnership(tenantId, bankAccountId, cfg);
 
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Arquivo de certificado vazio");
+        }
+
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "cert.p12";
+        String lower = originalName.toLowerCase();
+        if (!(lower.endsWith(".p12") || lower.endsWith(".pfx") || lower.endsWith(".pem"))) {
+            throw new IllegalArgumentException("Certificado deve ser .p12 ou .pfx");
+        }
+
+        // Carrega em memória para validar antes de salvar
+        byte[] bytes = file.getBytes();
+        char[] pass = password != null ? password.toCharArray() : new char[0];
+        validatePkcs12(bytes, pass);
+
+        // Persiste o arquivo físico
         String path = certificateStorageService.storeCertificate(tenantId, configId, file);
         cfg.setCertificatePath(path);
         cfg.setCertificatePassword(password);
 
+        // (Opcional) recalcula validade para retornar informação
+        Instant earliestExpiry = extractEarliestExpiry(bytes, pass);
+
         String masked = path.replaceAll("(?s).+?([^/\\\\]+)$", "***$1");
-        return new CertificateUploadResponse(cfg.getId(), masked);
+        return new CertificateUploadResponse(cfg.getId(), masked, originalName, earliestExpiry);
     }
 
     private void validateOwnership(Long tenantId, Long bankAccountId, BankConfiguration cfg) {
@@ -84,6 +107,44 @@ public class BankConfigurationService {
         }
         if (!cfg.getBankAccount().getId().equals(bankAccountId)) {
             throw new NotFoundException("Configuration does not belong to bank account");
+        }
+    }
+
+    private void validatePkcs12(byte[] bytes, char[] pass) {
+        try {
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            try (var in = new ByteArrayInputStream(bytes)) {
+                ks.load(in, pass);
+            }
+            // Checagem básica: pelo menos um alias com chave ou certificado
+            Enumeration<String> aliases = ks.aliases();
+            if (!aliases.hasMoreElements()) {
+                throw new IllegalArgumentException("PKCS12 sem aliases");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Falha ao validar PKCS12: " + e.getMessage(), e);
+        }
+    }
+
+    private Instant extractEarliestExpiry(byte[] bytes, char[] pass) {
+        try {
+            KeyStore ks = KeyStore.getInstance("PKCS12");
+            try (var in = new ByteArrayInputStream(bytes)) {
+                ks.load(in, pass);
+            }
+            Instant earliest = null;
+            Enumeration<String> aliases = ks.aliases();
+            while (aliases.hasMoreElements()) {
+                var alias = aliases.nextElement();
+                var cert = ks.getCertificate(alias);
+                if (cert instanceof java.security.cert.X509Certificate x509) {
+                    Instant exp = x509.getNotAfter().toInstant();
+                    if (earliest == null || exp.isBefore(earliest)) earliest = exp;
+                }
+            }
+            return earliest;
+        } catch (Exception e) {
+            return null; // não bloqueia retorno se falhar
         }
     }
 }

@@ -74,9 +74,6 @@ public class BankAccount {
     @OneToMany(mappedBy = "bankAccount")
     private Set<Transaction> transactions = new LinkedHashSet<>();
 
-    @OneToMany(mappedBy = "bankAccount")
-    private Set<Subscription> subscriptions = new LinkedHashSet<>();
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

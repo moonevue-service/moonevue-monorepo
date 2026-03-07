@@ -11,32 +11,32 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/tenant/{contractorId}/bank-account")
+@RequestMapping("/api/tenant/{tenantId}/bank-account")
 public class BankAccountController {
 
     private final BankAccountService bankAccountService;
 
     @PostMapping
-    public ResponseEntity<BankAccountResponse> create(@PathVariable("contractorId") Long contractorId,
+    public ResponseEntity<BankAccountResponse> create(@PathVariable("tenantId") Long tenantId,
                                                       @Valid @RequestBody BankAccountRequest req,
                                                       UriComponentsBuilder uriBuilder) {
-        var resp = bankAccountService.create(contractorId, req);
-        var uri = uriBuilder.path("/api/tenant/{contractorId}/bank-account/{id}")
-                .buildAndExpand(contractorId, resp.id()).toUri();
+        var resp = bankAccountService.create(tenantId, req);
+        var uri = uriBuilder.path("/api/tenant/{tenantId}/bank-account/{id}")
+                .buildAndExpand(tenantId, resp.id()).toUri();
         return ResponseEntity.created(uri).body(resp);
     }
 
     @PutMapping("/{bankAccountId}")
-    public ResponseEntity<BankAccountResponse> update(@PathVariable("contractorId") Long contractorId,
+    public ResponseEntity<BankAccountResponse> update(@PathVariable("tenantId") Long tenantId,
                                                       @PathVariable("bankAccountId") Long bankAccountId,
                                                       @Valid @RequestBody BankAccountRequest req) {
-        return ResponseEntity.ok(bankAccountService.update(contractorId, bankAccountId, req));
+        return ResponseEntity.ok(bankAccountService.update(tenantId, bankAccountId, req));
     }
 
     @DeleteMapping("/{bankAccountId}")
-    public ResponseEntity<Void> delete(@PathVariable("contractorId") Long contractorId,
+    public ResponseEntity<Void> delete(@PathVariable("tenantId") Long tenantId,
                                        @PathVariable("bankAccountId") Long bankAccountId) {
-        bankAccountService.delete(contractorId, bankAccountId);
+        bankAccountService.delete(tenantId, bankAccountId);
         return ResponseEntity.noContent().build();
     }
 }

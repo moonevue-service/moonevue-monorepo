@@ -55,6 +55,12 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Actuator (healthcheck, métricas) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- DB Driver -->
         <dependency>
             <groupId>org.postgresql</groupId>

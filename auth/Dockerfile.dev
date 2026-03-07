@@ -1,6 +1,0 @@
-# Desenvolvimento: roda mvn spring-boot:run com bind mount do repositório
-FROM maven:3.9.6-eclipse-temurin-21
-WORKDIR /app/moonevue
-EXPOSE 8081 5007
-# O comando é definido no docker-compose.dev.yml (com unset do JAVA_TOOL_OPTIONS)
-CMD ["mvn", "spring-boot:run"]

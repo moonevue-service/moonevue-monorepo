@@ -37,6 +37,20 @@ management:
 spring:
   config:
     activate:
+      on-profile: docker
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
+    username: ${SPRING_DATASOURCE_USERNAME:moonevue}
+    password: ${SPRING_DATASOURCE_PASSWORD:moone_data_vue}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 60000
+      connection-timeout: 30000
+---
+spring:
+  config:
+    activate:
       on-profile: prod
 moonevue:
   auth:

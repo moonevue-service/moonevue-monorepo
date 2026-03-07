@@ -2,19 +2,20 @@ server:
   port: 8080
   forward-headers-strategy: framework
 
-# Configurações base comuns (independem do ambiente)
+auth:
+  base-url: ${AUTH_BASE_URL:http://auth:8081}
+  internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
+  cookie-name: ${AUTH_COOKIE_NAME:sid}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
 spring:
   application:
     name: gateway
-  auth:
-    base-url: ${AUTH_BASE_URL:http://auth:8081}
-    internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
-    cookie-name: ${AUTH_COOKIE_NAME:sid}
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
     username: ${SPRING_DATASOURCE_USERNAME:moonevue}
@@ -36,6 +37,9 @@ moonevue:
         header: X-Signature-Timestamp
         skew-seconds: 300
 
+banks:
+  efi:
+    production: false
 # Perfil docker (ativado via SPRING_PROFILES_ACTIVE=docker no docker-compose)
 ---
 spring:

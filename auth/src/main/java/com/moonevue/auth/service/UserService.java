@@ -1,6 +1,6 @@
 package com.moonevue.auth.service;
 
-import com.moonevue.core.entity.Role;
+import com.moonevue.core.entity.AuthRole;
 import com.moonevue.core.entity.Tenant;
 import com.moonevue.core.entity.User;
 import com.moonevue.core.repository.RoleRepository;
@@ -12,17 +12,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository users;
-    private final RoleRepository roles;
     private final PasswordEncoder encoder;
 
     @Transactional
-    public User createUser(Tenant tenant, String email, String rawPassword) {
+    public User createUser(Tenant tenant, String email, String rawPassword, List<AuthRole> roles) {
         var normalized = email.trim().toLowerCase();
         if (users.findByEmailIgnoreCase(normalized).isPresent()) {
             throw new DataIntegrityViolationException("email already exists");
@@ -34,16 +34,8 @@ public class UserService {
         user.setPasswordHash(encoder.encode(rawPassword));
         user.setEnabled(true);
 
-        // Garante papel padrão
-        var roleUser = roles.findByName("ROLE_USER")
-                .orElseGet(() -> {
-                    var r = new Role();
-                    r.setName("ROLE_USER");
-                    return roles.save(r);
-                });
-
         user.setRoles(new HashSet<>());
-        user.getRoles().add(roleUser);
+        user.getRoles().addAll(roles);
 
         return users.save(user);
     }

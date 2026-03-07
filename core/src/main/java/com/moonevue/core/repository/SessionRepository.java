@@ -13,6 +13,4 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
 
     Optional<Session> findFirstByUserAndRevokedFalseAndExpiresAtAfterOrderByLastSeenAtDesc(
             User user, OffsetDateTime now);
-
-    long deleteByExpiresAtBefore(OffsetDateTime time);
 }

@@ -1,6 +1,0 @@
-# .dockerignore do módulo finance (quando o context é "./finance")
-target/
-.idea/
-.vscode/
-.DS_Store
-logs/

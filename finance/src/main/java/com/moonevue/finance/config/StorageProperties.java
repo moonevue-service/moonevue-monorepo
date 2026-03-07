@@ -1,20 +1,15 @@
 package com.moonevue.finance.config;
 
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "app.storage")
+@Setter
+@Getter
+@ConfigurationProperties(prefix = "storage")
 public class StorageProperties {
-    /**
-     * Diretório base onde os certificados serão armazenados.
-     * Ex.: /opt/gateway/certs (não commitado no repositório).
-     */
-    private String certsDir = "storage/certs";
 
-    public String getCertsDir() {
-        return certsDir;
-    }
+    private String certsDir;
 
-    public void setCertsDir(String certsDir) {
-        this.certsDir = certsDir;
-    }
 }

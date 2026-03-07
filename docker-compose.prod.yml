@@ -1,4 +1,18 @@
-version: "3.9"
+# ============================================
+# Moonevue — Docker Compose (Produção)
+# ============================================
+# Uso:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod down
+#
+# Pré-requisito: buildar as imagens ou ter elas num registry.
+#   docker compose -f docker-compose.prod.yml build
+#
+# Variáveis obrigatórias em .env.prod:
+#   POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD,
+#   SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD,
+#   AUTH_INTERNAL_TOKEN, AUTH_COOKIE_DOMAIN, AUTH_COOKIE_SECURE, AUTH_COOKIE_SAMESITE,
+#   WEBHOOK_HMAC_SECRET
 
 networks:
   moonevue-net:
@@ -6,105 +20,167 @@ networks:
 
 volumes:
   db_data:
-  files:
+    driver: local
+  certs_data:
+    driver: local
 
 services:
+
+  # =================== BANCO DE DADOS ===================
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    container_name: moonevue-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-moonevue}
-      POSTGRES_USER: ${POSTGRES_USER:-moonevue}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina no .env}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       TZ: ${TZ:-America/Sao_Paulo}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
-    restart: unless-stopped
-    networks: [moonevue-net]
-    # Em produção real, NÃO exponha a porta do banco publicamente.
-    # ports: ["5432:5432"]
+      start_period: 15s
+    restart: always
+    networks:
+      - moonevue-net
+    # Em produção, NÃO exponha a porta 5432 para o host.
+    # Se precisar de acesso externo, use um túnel SSH ou VPN.
 
+  # =================== AUTH SERVICE ===================
   auth:
-    image: ${AUTH_IMAGE:?defina no .env}
+    build:
+      context: .
+      dockerfile: auth/Dockerfile
+    image: ${AUTH_IMAGE:-moonevue/auth:latest}
+    container_name: moonevue-auth
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_AUTH:?defina no .env}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?defina no .env}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina no .env}
-      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
-      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:?defina no .env}
-      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:true}
-      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:Strict}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-Strict}
       AUTH_COOKIE_MAX_AGE: ${AUTH_COOKIE_MAX_AGE:-1800}
       TZ: ${TZ:-America/Sao_Paulo}
+      # JVM para produção: limita memória heap
+      JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:MaxRAMPercentage=75.0
+        -Djava.security.egd=file:/dev/./urandom
+    expose:
+      - "8081"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-    networks: [moonevue-net]
-    # Em produção, deixe SEM portas públicas (o gateway chama internamente).
-    # Descomente se precisar acessar direto por fora:
-    # ports: ["8081:8081"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    networks:
+      - moonevue-net
 
+  # =================== GATEWAY SERVICE ===================
   gateway:
-    image: ${GATEWAY_IMAGE:?defina no .env}
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: ${GATEWAY_IMAGE:-moonevue/gateway:latest}
+    container_name: moonevue-gateway
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_GATEWAY:-}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-}
+      SPRING_PROFILES_ACTIVE: prod,docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
       AUTH_BASE_URL: http://auth:8081
-      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
-      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-sid}
-      WEBHOOK_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET:-change-me}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      STORAGE_CERTS_DIR: /data/certs
+      WEBHOOK_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET}
       TZ: ${TZ:-America/Sao_Paulo}
+      JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:MaxRAMPercentage=75.0
+        -Djava.security.egd=file:/dev/./urandom
+    ports:
+      - "8080:8080"     # API pública
+    volumes:
+      - certs_data:/data/certs:ro
     depends_on:
       auth:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    ports:
-      - "8080:8080" # Gateway é o único público
-    restart: unless-stopped
-    networks: [moonevue-net]
-
-  finance:
-    image: ${FINANCE_IMAGE:?defina no .env}
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_FIN:?defina no .env}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?defina no .env}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina no .env}
-      AUTH_BASE_URL: http://auth:8081
-      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:?defina no .env}
-      FINANCE_CRYPTO_SECRET: ${FINANCE_CRYPTO_SECRET:?defina no .env}
-      TZ: ${TZ:-America/Sao_Paulo}
-    depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    networks:
+      - moonevue-net
+
+  # =================== FINANCE SERVICE ===================
+  finance:
+    build:
+      context: .
+      dockerfile: finance/Dockerfile
+    image: ${FINANCE_IMAGE:-moonevue/finance:latest}
+    container_name: moonevue-finance
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      AUTH_BASE_URL: http://auth:8081
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      STORAGE_CERTS_DIR: /data/certs
+      TZ: ${TZ:-America/Sao_Paulo}
+      JAVA_OPTS: >-
+        -XX:+UseG1GC
+        -XX:MaxRAMPercentage=75.0
+        -Djava.security.egd=file:/dev/./urandom
+    expose:
+      - "8082"
+    volumes:
+      - certs_data:/data/certs:ro
+    depends_on:
       auth:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8082/actuator/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-    networks: [moonevue-net]
-    # Em produção, deixe SEM porta pública:
-    # ports: ["8082:8082"]
-    # Se finance grava arquivos, monte storage durável (use S3 em prod; volume local abaixo é opcional):
-    volumes:
-      - files:/data/files
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    networks:
+      - moonevue-net
+

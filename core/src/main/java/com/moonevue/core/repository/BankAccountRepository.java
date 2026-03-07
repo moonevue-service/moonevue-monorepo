@@ -12,9 +12,6 @@ import java.util.Optional;
 public interface BankAccountRepository extends JpaRepository<BankAccount, Long> {
 
     // Scoping por tenant
-    List<BankAccount> findByTenantId(Long tenantId);
-    Page<BankAccount> findByTenantId(Long tenantId, Pageable pageable);
-    Page<BankAccount> findByTenantIdAndActiveTrue(Long tenantId, Pageable pageable);
     Optional<BankAccount> findByIdAndTenantId(Long id, Long tenantId);
 
     // Unicidade da conta bancária por tenant

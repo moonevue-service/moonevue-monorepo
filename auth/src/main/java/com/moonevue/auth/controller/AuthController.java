@@ -3,8 +3,11 @@ package com.moonevue.auth.controller;
 import com.moonevue.auth.dto.RegisterRequest;
 import com.moonevue.auth.service.SessionService;
 import com.moonevue.auth.service.UserService;
+import com.moonevue.core.entity.AuthRole;
 import com.moonevue.core.entity.Session;
 import com.moonevue.core.entity.Tenant;
+import com.moonevue.core.enums.RoleAuth;
+import com.moonevue.core.repository.RoleRepository;
 import com.moonevue.core.repository.TenantRepository;
 import com.moonevue.core.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -22,10 +25,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.WebUtils;
+import org.springframework.beans.factory.annotation.Value;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @RestController
 @RequestMapping("/auth")
@@ -37,18 +39,19 @@ public class AuthController {
     private final PasswordEncoder encoder;
     private final SessionService sessions;
     private final UserService userService;
+    private final RoleRepository roles;
 
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.name}")
+    @Value("${moonevue.auth.cookie.name}")
     private String cookieName;
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.domain}")
+    @Value("${moonevue.auth.cookie.domain}")
     private String cookieDomain;
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.path}")
+    @Value("${moonevue.auth.cookie.path}")
     private String cookiePath;
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.secure}")
+    @Value("${moonevue.auth.cookie.secure}")
     private boolean cookieSecure;
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.same-site}")
+    @Value("${moonevue.auth.cookie.same-site}")
     private String cookieSameSite;
-    @org.springframework.beans.factory.annotation.Value("${moonevue.auth.cookie.max-age-seconds}")
+    @Value("${moonevue.auth.cookie.max-age-seconds}")
     private long cookieMaxAge;
 
     // Registro: cria Tenant + primeiro usuário (owner/admin)
@@ -72,7 +75,11 @@ public class AuthController {
             t.setActive(true);
             t = tenants.save(t);
 
-            var user = userService.createUser(t, body.getEmail(), body.getPassword());
+            Optional<AuthRole> role = roles.findById(RoleAuth.ADMIN_TENANT.getId());
+            if (role.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            var user = userService.createUser(t, body.getEmail(), body.getPassword(), List.of(role.get()));
 
             String ua = resolveUserAgent(req);
             String ip = resolveClientIp(req);
@@ -157,12 +164,12 @@ public class AuthController {
         var s = opt.get();
         var u = s.getUser();
         var t = u.getTenant();
-        return ResponseEntity.ok(Map.of(
-                "userId", u.getId(),
-                "email", u.getEmail(),
-                "tenantId", t != null ? t.getId() : null,
-                "roles", u.getRoles().stream().map(r -> r.getName()).toList()
-        ));
+        var body = new HashMap<String, Object>();
+        body.put("userId", u.getId());
+        body.put("email", u.getEmail());
+        body.put("tenantId", t != null ? t.getId() : null);
+        body.put("roles", u.getRoles().stream().map(AuthRole::getName).toList());
+        return ResponseEntity.ok(body);
     }
 
     @Hidden

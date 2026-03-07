@@ -1,13 +1,47 @@
-# .dockerignore na raiz (quando o build context é ".")
+# ============================================
+# .dockerignore — Exclui do build context
+# ============================================
+# Reduz o tamanho do contexto enviado ao Docker daemon.
+# Build context é a raiz do projeto (".").
+
+# Git
 .git
 .gitignore
-**/target/
+.gitattributes
+
+# IDE
 **/.idea/
 **/.vscode/
+**/*.iml
+
+# Build artifacts
+**/target/
+**/*.jar
+**/*.class
+
+# OS
 **/.DS_Store
-**/.classpath
-**/.project
-**/.settings/
-**/.mvn/wrapper/maven-wrapper.jar
-**/node_modules/
+**/*Zone.Identifier
+**/Thumbs.db
+
+# Docker (evita loop)
+docker-compose*.yml
+Dockerfile.dev
+.env
+.env.*
+
+# Logs
 **/logs/
+**/*.log
+
+# Node (se houver frontend futuro)
+**/node_modules/
+
+# Docs
+README.md
+**/HELP.md
+LICENSE
+
+# Certificados (nunca incluir na imagem, usar volumes)
+certs/
+

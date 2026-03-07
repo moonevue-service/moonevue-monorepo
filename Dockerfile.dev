@@ -1,0 +1,23 @@
+# ============================================
+# Moonevue — Dockerfile de Desenvolvimento
+# ============================================
+# Imagem única para todos os módulos.
+# O código é montado via bind mount (docker-compose).
+# O working_dir e command são definidos no docker-compose.
+#
+# Uso: docker-compose.yml referencia este Dockerfile com
+#      context: . e dockerfile: Dockerfile.dev
+
+FROM maven:3.9.9-eclipse-temurin-21
+
+# Variável para indicar que estamos em container (útil para scripts)
+ENV CONTAINER=true
+
+WORKDIR /app/moonevue
+
+# Portas comuns: app (varia por service) + debug (5005)
+EXPOSE 8080 8081 8082 5005
+
+# Comando padrão (será sobrescrito pelo docker-compose)
+CMD ["mvn", "spring-boot:run"]
+

@@ -46,7 +46,7 @@ public class BankConfigurationController {
                                                                        @PathVariable("bankAccountId") Long bankAccountId,
                                                                        @PathVariable("configId") Long configId,
                                                                        @RequestPart("file") MultipartFile file,
-                                                                       @RequestPart("password") String password) throws IOException {
+                                                                       @RequestPart(value = "password", required = false) String password) throws IOException {
         var resp = bankConfigurationService.uploadCertificate(tenantId, bankAccountId, configId, file, password);
         return ResponseEntity.ok(resp);
     }

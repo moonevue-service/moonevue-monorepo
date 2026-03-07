@@ -13,9 +13,9 @@
     <modules>
         <module>useful</module>
         <module>core</module>
+        <module>auth</module>
         <module>gateway</module>
         <module>finance</module>
-        <module>auth</module>
     </modules>
 
     <properties>

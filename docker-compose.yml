@@ -1,0 +1,184 @@
+# ============================================
+# Moonevue — Docker Compose (Desenvolvimento)
+# ============================================
+# Uso:
+#   docker compose up -d          → sobe tudo
+#   docker compose up -d auth     → sobe só auth + postgres
+#   docker compose logs -f auth   → acompanha logs do auth
+#   docker compose down           → para tudo
+#   docker compose down -v        → para tudo E apaga dados do banco
+#
+# As variáveis vêm do arquivo .env (lido automaticamente).
+
+networks:
+  moonevue-net:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
+  maven_cache:
+    driver: local
+
+services:
+
+  # =================== BANCO DE DADOS ===================
+  postgres:
+    image: postgres:16-alpine
+    container_name: moonevue-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  # =================== AUTH SERVICE (porta 8081) ===================
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: moonevue-auth
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE}
+      TZ: ${TZ}
+      MAVEN_OPTS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    ports:
+      - "8081:8081"     # App
+      - "5007:5005"     # Debug
+    volumes:
+      - .:/app/moonevue                # Bind mount do código (hot reload)
+      - maven_cache:/root/.m2          # Cache do Maven (volume nomeado = mais rápido)
+    working_dir: /app/moonevue
+    command: >
+      sh -lc '
+        unset JAVA_TOOL_OPTIONS;
+        cd /app/moonevue;
+        mvn -q -DskipTests install;
+        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/auth/target/auth-1.0.0.jar
+      '
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  # =================== GATEWAY SERVICE (porta 8080) ===================
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: moonevue-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      AUTH_BASE_URL: ${AUTH_BASE_URL}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      STORAGE_CERTS_DIR: ${STORAGE_CERTS_DIR}
+      WEBHOOK_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET}
+      TZ: ${TZ}
+      MAVEN_OPTS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    ports:
+      - "8080:8080"     # App
+      - "5005:5005"     # Debug
+    volumes:
+      - .:/app/moonevue
+      - maven_cache:/root/.m2
+      - ./certs:/data/certs:ro          # Certificados (read-only)
+    working_dir: /app/moonevue
+    command: >
+      sh -lc '
+        unset JAVA_TOOL_OPTIONS;
+        cd /app/moonevue;
+        mvn -q -DskipTests install;
+        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/gateway/target/gateway.jar
+      '
+    depends_on:
+      auth:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+
+  # =================== FINANCE SERVICE (porta 8082) ===================
+  finance:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: moonevue-finance
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,docker
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      AUTH_BASE_URL: ${AUTH_BASE_URL}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      STORAGE_CERTS_DIR: ${STORAGE_CERTS_DIR}
+      TZ: ${TZ}
+      MAVEN_OPTS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+    ports:
+      - "8082:8082"     # App (porta fixa, sem ambiguidade)
+      - "5006:5005"     # Debug
+    volumes:
+      - .:/app/moonevue
+      - maven_cache:/root/.m2
+      - ./certs:/data/certs:ro
+    working_dir: /app/moonevue
+    command: >
+      sh -lc '
+        unset JAVA_TOOL_OPTIONS;
+        cd /app/moonevue;
+        mvn -q -DskipTests install;
+        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/finance/target/finance.jar
+      '
+    depends_on:
+      auth:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - moonevue-net
+

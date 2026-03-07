@@ -1,5 +1,6 @@
 package com.moonevue.gateway.controller;
 
+import com.moonevue.gateway.dto.ChargeRequestDTO;
 import com.moonevue.gateway.dto.PaymentRequestDTO;
 import com.moonevue.gateway.service.PaymentService;
 import jakarta.validation.Valid;
@@ -19,7 +20,7 @@ public class PaymentController {
 
     // Recebe DTO tipado e delega a lógica de conversão/roteamento para o service
     @PostMapping
-    public ResponseEntity<?> createPayment(@Valid @RequestBody PaymentRequestDTO request) {
+    public ResponseEntity<?> createPayment(@Valid @RequestBody ChargeRequestDTO request) {
         try {
             String response = paymentService.create(request);
             return ResponseEntity.ok(response);

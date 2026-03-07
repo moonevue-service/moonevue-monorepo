@@ -15,19 +15,6 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    // Nome do atributo é bankAccount (não "account")
-    Page<Transaction> findByBankAccountId(Long bankAccountId, Pageable pageable);
-
-    Page<Transaction> findBySubscriptionId(Long subscriptionId, Pageable pageable);
-
-    Page<Transaction> findByStatus(TransactionStatus status, Pageable pageable);
-
-    Page<Transaction> findByType(TransactionType type, Pageable pageable);
-
-    Optional<Transaction> findByExternalReference(String externalReference);
-
-    List<Transaction> findTop50ByBankAccountIdOrderByCreatedAtDesc(Long bankAccountId);
-
     // Agregações corrigindo o path property para bankAccount
     @Query("""
            select coalesce(sum(t.amount), 0)
