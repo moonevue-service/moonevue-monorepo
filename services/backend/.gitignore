@@ -1,0 +1,63 @@
+# ============================================
+# Moonevue — .gitignore (raiz do projeto)
+# ============================================
+
+# ---------- Credenciais / Segredos ----------
+# NUNCA commite .env com senhas reais
+.env
+.env.prod
+.env.local
+!.env.example
+
+# Certificados
+certs/
+
+# ---------- Build ----------
+**/target/
+**/*.jar
+**/*.class
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# ---------- IDE ----------
+.idea/
+**/*.iws
+**/*.iml
+**/*.ipr
+.vscode/
+*.code-workspace
+
+# ---------- STS / Eclipse ----------
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# ---------- NetBeans ----------
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ---------- OS ----------
+.DS_Store
+._*
+Thumbs.db
+*Zone.Identifier
+
+# ---------- Logs ----------
+**/logs/
+**/*.log
+
+# ---------- Docker ----------
+# Não ignorar compose/Dockerfile, apenas dados locais
+docker-data/
+

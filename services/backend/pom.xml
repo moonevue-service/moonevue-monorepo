@@ -1,0 +1,152 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.moonevue</groupId>
+    <artifactId>moonevue</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>Moonevue Parent</name>
+
+    <modules>
+        <module>useful</module>
+        <module>core</module>
+        <module>auth</module>
+        <module>gateway</module>
+        <module>finance</module>
+    </modules>
+
+    <properties>
+        <!-- PROJECT -->
+        <java.version>21</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.version>1.0.0</project.version>
+
+        <!-- MODULE VERSIONS (opcional manter) -->
+        <auth.version>1.0.0</auth.version>
+        <core.version>1.0.0</core.version>
+        <finance.version>1.0.0</finance.version>
+        <gateway.version>1.0.0</gateway.version>
+        <useful.version>1.0.0</useful.version>
+
+        <!-- SPRING BOOT -->
+        <spring.boot.version>3.5.6</spring.boot.version>
+        <!-- Se possível, prefira não travar spring-security-test manualmente e herdar do BOM -->
+        <spring.security.test.version>6.5.5</spring.security.test.version>
+
+        <!-- HTTP client overrides (forçar versão) -->
+        <apache.httpclient5.version>5.2.1</apache.httpclient5.version>
+
+        <!-- FLYWAY override -->
+        <flyway.version>11.13.2</flyway.version>
+
+        <!-- Swagger -->
+        <swagger.version>2.8.13</swagger.version>
+
+        <!-- Swagger -->
+        <logback.version>8.0</logback.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Gerencia versões dos módulos internos para permitir omitir <version> nos filhos -->
+            <dependency>
+                <groupId>com.moonevue</groupId>
+                <artifactId>useful</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.moonevue</groupId>
+                <artifactId>core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.moonevue</groupId>
+                <artifactId>gateway</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.moonevue</groupId>
+                <artifactId>finance</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.moonevue</groupId>
+                <artifactId>auth</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Importa BOM do Spring Boot: gerencia versões dos starters e ecosistema -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring.boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+
+            <!-- Se realmente quiser travar spring-security-test por fora do BOM -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-test</artifactId>
+                <version>${spring.security.test.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Swagger -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${swagger.version}</version>
+            </dependency>
+
+            <!-- Logger -->
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring.boot.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${java.version}</release>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
