@@ -20,7 +20,7 @@ moonevue:
   auth:
     cookie:
       name: sid
-      domain: ${AUTH_COOKIE_DOMAIN:localhost}
+      domain: ${AUTH_COOKIE_DOMAIN:}
       path: /
       secure: ${AUTH_COOKIE_SECURE:false}   # true em prod
       same-site: ${AUTH_COOKIE_SAMESITE:Lax} # Strict em prod

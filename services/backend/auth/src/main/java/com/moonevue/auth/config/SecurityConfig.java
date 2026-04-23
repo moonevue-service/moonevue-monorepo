@@ -36,8 +36,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/auth/login", "/auth/register").permitAll()
                 .requestMatchers(HttpMethod.GET, "/auth/logout").permitAll()
 
-                // Endpoints internos (somente gateway com header)
-                .requestMatchers("/auth/introspect", "/auth/touch").hasAuthority("INTERNAL")
+                // Sessao local ou acesso interno
+                .requestMatchers("/auth/introspect", "/auth/touch").authenticated()
 
                 .requestMatchers("/auth/employees/**").authenticated()
 

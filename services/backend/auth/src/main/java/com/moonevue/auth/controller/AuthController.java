@@ -22,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.WebUtils;
@@ -223,14 +224,18 @@ public class AuthController {
     }
 
     private String buildCookie(String value, long maxAge) {
-        return ResponseCookie.from(cookieName, value)
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieName, value)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .domain(cookieDomain)
                 .sameSite(cookieSameSite)
                 .path(cookiePath)
-                .maxAge(maxAge)
-                .build().toString();
+                .maxAge(maxAge);
+
+        if (StringUtils.hasText(cookieDomain)) {
+            builder.domain(cookieDomain);
+        }
+
+        return builder.build().toString();
     }
 
     @Data

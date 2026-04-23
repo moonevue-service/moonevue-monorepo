@@ -1,0 +1,19 @@
+{
+  "name": "moonevue-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Monorepo for Moonevue frontend and backend services",
+  "workspaces": [
+    "apps/frontend"
+  ],
+  "scripts": {
+    "dev": "docker compose up --build",
+    "dev:backend": "docker compose up --build postgres auth gateway finance",
+    "dev:frontend": "npm run dev --workspace apps/frontend",
+    "build:frontend": "npm run build --workspace apps/frontend",
+    "lint:frontend": "npm run lint --workspace apps/frontend"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

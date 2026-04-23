@@ -1,0 +1,23 @@
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Root env files
+.env
+.env.local
+.env.production
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js build output
+.next/
+out/
+
+# Docker
+*.pid
+
+# General logs
+*.log

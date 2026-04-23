@@ -1,0 +1,135 @@
+name: moonevue-monorepo
+region: nyc
+
+services:
+  - name: frontend
+    environment_slug: node-js
+    source_dir: /apps/frontend
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: moonevue-service/moonevue-monorepo
+    http_port: 3000
+    run_command: npm run start
+    build_command: npm install && npm run build
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    envs:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://api.example.com
+        scope: RUN_TIME
+
+  - name: gateway
+    dockerfile_path: /services/backend/gateway/Dockerfile
+    source_dir: /services/backend
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: moonevue-service/moonevue-monorepo
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /actuator/health
+    envs:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod,docker
+      - key: AUTH_BASE_URL
+        value: http://auth:8081
+      - key: AUTH_INTERNAL_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_ME
+      - key: STORAGE_CERTS_DIR
+        value: /data/certs
+      - key: WEBHOOK_HMAC_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_ME
+      - key: SPRING_DATASOURCE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: SPRING_DATASOURCE_USERNAME
+        scope: RUN_TIME
+        value: ${db.USERNAME}
+      - key: SPRING_DATASOURCE_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: ${db.PASSWORD}
+
+  - name: auth
+    dockerfile_path: /services/backend/auth/Dockerfile
+    source_dir: /services/backend
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: moonevue-service/moonevue-monorepo
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8081
+    health_check:
+      http_path: /actuator/health
+    envs:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: AUTH_INTERNAL_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_ME
+      - key: AUTH_COOKIE_DOMAIN
+        value: REPLACE_WITH_PROD_DOMAIN
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: None
+      - key: SPRING_DATASOURCE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: SPRING_DATASOURCE_USERNAME
+        scope: RUN_TIME
+        value: ${db.USERNAME}
+      - key: SPRING_DATASOURCE_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: ${db.PASSWORD}
+
+  - name: finance
+    dockerfile_path: /services/backend/finance/Dockerfile
+    source_dir: /services/backend
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: moonevue-service/moonevue-monorepo
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    http_port: 8082
+    health_check:
+      http_path: /actuator/health
+    envs:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod,docker
+      - key: AUTH_BASE_URL
+        value: http://auth:8081
+      - key: AUTH_INTERNAL_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_ME
+      - key: STORAGE_CERTS_DIR
+        value: /data/certs
+      - key: SPRING_DATASOURCE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: SPRING_DATASOURCE_USERNAME
+        scope: RUN_TIME
+        value: ${db.USERNAME}
+      - key: SPRING_DATASOURCE_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+        value: ${db.PASSWORD}
+
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    production: false
+    cluster_name: moonevue-db

@@ -34,9 +34,7 @@ public class LocalSessionAuthFilter extends OncePerRequestFilter {
                 || path.startsWith("/v3/api-docs")
                 || path.equals("/auth/login")
                 || path.equals("/auth/register")
-                || path.equals("/auth/logout")
-                || path.equals("/auth/introspect")
-                || path.equals("/auth/touch");
+            || path.equals("/auth/logout");
     }
 
     @Override
