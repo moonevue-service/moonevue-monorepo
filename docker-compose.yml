@@ -18,6 +18,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
       INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://gateway:8080}
       AUTH_INTERNAL_API_BASE_URL: ${AUTH_INTERNAL_API_BASE_URL:-http://auth:8081}
+      FINANCE_INTERNAL_API_BASE_URL: ${FINANCE_INTERNAL_API_BASE_URL:-http://finance:8082}
       NODE_ENV: development
     ports:
       - "3000:3000"
@@ -79,7 +80,7 @@ services:
     command: >
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl auth -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/auth/target/auth-1.0.0.jar
       '
     depends_on:
@@ -122,7 +123,7 @@ services:
     command: >
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl gateway -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/gateway/target/gateway.jar
       '
     depends_on:
@@ -161,12 +162,12 @@ services:
     volumes:
       - ./services/backend:/app/moonevue
       - maven_cache:/root/.m2
-      - ./services/backend/certs:/data/certs:ro
+      - ./services/backend/certs:/data/certs          # escrita habilitada para upload de certificados
     working_dir: /app/moonevue
     command: >
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl finance -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/finance/target/finance.jar
       '
     depends_on:

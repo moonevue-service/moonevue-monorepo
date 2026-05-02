@@ -7,20 +7,30 @@ import com.moonevue.gateway.dto.TransactionSummaryDTO;
 import com.moonevue.gateway.service.PaymentService;
 import com.moonevue.core.enums.BankType;
 import com.moonevue.core.security.IntrospectedAuthToken;
+import com.moonevue.core.enums.BankType;
+import com.moonevue.core.security.IntrospectedAuthToken;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/payments")
 public class PaymentController {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
 
     private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
 
@@ -135,12 +145,39 @@ public class PaymentController {
             log.error("[PaymentController] Resposta inválida do provedor: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .body(Map.of("error", "Resposta inválida do provedor", "detail", e.getMessage()));
+            log.warn("[PaymentController] Requisição inválida: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            log.error("[PaymentController] Resposta inválida do provedor: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(Map.of("error", "Resposta inválida do provedor", "detail", e.getMessage()));
         } catch (Exception e) {
+            log.error("[PaymentController] Falha ao criar pagamento: {}", e.getMessage(), e);
             log.error("[PaymentController] Falha ao criar pagamento: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .body(Map.of("error", "Falha ao criar pagamento", "detail", e.getMessage()));
+                    .body(Map.of("error", "Falha ao criar pagamento", "detail", e.getMessage()));
         }
     }
+
+                public record PixImmediateRequest(
+                    BankType bank,
+                    Long bankConfigurationId,
+                    ChargeRequestDTO.PixImmediate payment
+                ) {}
+
+                public record PixDueRequest(
+                    BankType bank,
+                    Long bankConfigurationId,
+                    ChargeRequestDTO.PixDue payment
+                ) {}
+
+                public record BoletoRequest(
+                    BankType bank,
+                    Long bankConfigurationId,
+                    ChargeRequestDTO.Boleto payment
+                ) {}
 
                 public record PixImmediateRequest(
                     BankType bank,

@@ -153,9 +153,18 @@ public class PaymentService {
 
     @Transactional
     public ChargeResponseDTO createCharge(ChargeRequestDTO request) {
+        ChargeResponseDTO response = createCharge(request);
+        return serialize(response);
+    }
+
+    @Transactional
+    public ChargeResponseDTO createCharge(ChargeRequestDTO request) {
         BankIntegration integration = factory.getIntegration(request.bank());
         BankConfiguration config = bankConfigurationRepository.findById(request.bankConfigurationId())
                 .orElseThrow(() -> new IllegalArgumentException("BankConfiguration não encontrada: " + request.bankConfigurationId()));
+
+        log.info("[PaymentService] createCharge bank={} configId={} instrument={}",
+                request.bank(), request.bankConfigurationId(), request.payment().instrument());
 
         log.info("[PaymentService] createCharge bank={} configId={} instrument={}",
                 request.bank(), request.bankConfigurationId(), request.payment().instrument());
@@ -165,6 +174,17 @@ public class PaymentService {
         String payloadJson = serialize(request);
 
         // 2) Chama o provedor
+        String responseJson;
+        try {
+            responseJson = integration.processPayment(payloadJson, config);
+        } catch (Exception e) {
+            log.error("[PaymentService] Falha na integração bank={} configId={} instrument={}: {}",
+                    request.bank(), request.bankConfigurationId(), request.payment().instrument(), e.getMessage(), e);
+            throw e;
+        }
+
+        // 3) Converte resposta padronizada da integração
+        ChargeResponseDTO resp = parseChargeResponse(responseJson);
         String responseJson;
         try {
             responseJson = integration.processPayment(payloadJson, config);
@@ -188,6 +208,8 @@ public class PaymentService {
 
         // externalReference = id padronizado (txid no PIX / charge_id no boleto)
         if (resp.getId() != null) {
+        // externalReference = id padronizado (txid no PIX / charge_id no boleto)
+        if (resp.getId() != null) {
             tx.setExternalReference(resp.getId());
         }
 
@@ -209,10 +231,17 @@ public class PaymentService {
         md.put("amount", resp.getAmount());
         md.put("locId", resp.getLocId());
         md.put("location", resp.getLocation());
+        md.put("providerId", resp.getId());
+        md.put("status", resp.getStatus());
+        md.put("amount", resp.getAmount());
+        md.put("locId", resp.getLocId());
+        md.put("location", resp.getLocation());
         log.setMetadata(md);
 
         transactionLogRepository.save(log);
 
+        // 6) Retorna a resposta padronizada pela integração
+        return resp;
         // 6) Retorna a resposta padronizada pela integração
         return resp;
     }
@@ -238,6 +267,14 @@ public class PaymentService {
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
             default:
                 throw new IllegalArgumentException("Instrumento não suportado para cálculo de amount.");
+        }
+    }
+
+    private ChargeResponseDTO parseChargeResponse(String responseJson) {
+        try {
+            return objectMapper.readValue(responseJson, ChargeResponseDTO.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Resposta do provedor em formato inválido.", e);
         }
     }
 

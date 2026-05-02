@@ -1,6 +1,7 @@
 import "@/app/ui/globals.css";
 import { inter } from "@/app/ui/fonts";
-import { ThemeProvider } from "@/lib/theme-provider";
+import { AntdRegistry } from "@ant-design/nextjs-registry";
+import AntdProvider from "./antd-provider";
 import { AuthProvider } from "@/app/providers";
 
 export default function RootLayout({
@@ -11,16 +12,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${inter.className} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ThemeProvider>
+        <AntdRegistry>
+          <AntdProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </AntdProvider>
+        </AntdRegistry>
       </body>
     </html>
   );

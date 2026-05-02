@@ -1,166 +1,193 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
+import { Button, Card, Divider, Form, Input, Spin, Typography } from 'antd';
+import { LockOutlined, MailOutlined, ShopOutlined } from '@ant-design/icons';
 import { useAuth } from '@/app/providers';
-import { Loader2 } from 'lucide-react';
+import { ApiError, AuthApi } from '@/lib/api';
+
+const { Title, Text, Paragraph } = Typography;
+
+type FormValues = {
+  tenantName: string;
+  tenantDocument: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
+
+function mapRegisterError(err: unknown): string {
+  const apiErr = err as ApiError | undefined;
+  const code = apiErr?.data?.error;
+  if (code === 'password_mismatch') return 'As senhas não correspondem';
+  if (code === 'tenant_document_already_exists') return 'Empresa já registrada com este CNPJ/CPF';
+  if (code === 'email_already_exists') return 'Este email já está em uso';
+  if (apiErr?.status === 403) return 'Não foi possível criar o usuário administrador';
+  return apiErr?.message || 'Registro falhou. Tente novamente.';
+}
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, isLoading: authLoading } = useAuth();
-  const [formData, setFormData] = useState({
-    tenantName: '',
-    tenantDocument: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não correspondem');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      await register(formData);
-      router.push('/dashboard');
-    } catch (err: any) {
-      setError(err?.message || 'Registro falhou. Tente novamente.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { refreshSession, isLoading: authLoading } = useAuth();
+  const [form] = Form.useForm<FormValues>();
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
       </div>
     );
   }
 
+  const handleFinish = async (values: FormValues) => {
+    try {
+      await AuthApi.registerWithSession(values);
+      await refreshSession();
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      form.setFields([
+        { name: 'confirmPassword', errors: [mapRegisterError(err)] },
+      ]);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-background to-muted px-4 py-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl">Criar Conta</CardTitle>
-          <CardDescription>
-            Comece a gerenciar suas finanças agora
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="tenantName">Nome da Empresa</Label>
-              <Input
-                id="tenantName"
-                name="tenantName"
-                placeholder="Sua Empresa Ltda"
-                value={formData.tenantName}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
-            </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        alignItems: 'stretch',
+      }}
+    >
+      {/* Marketing section — hidden on small screens via globals.css */}
+      <section
+        className="auth-marketing"
+        style={{
+          background: '#f0f5ff',
+          padding: '60px 48px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          gap: 20,
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-block',
+            background: '#e6f4ff',
+            color: '#1677ff',
+            padding: '4px 14px',
+            borderRadius: 99,
+            fontSize: 13,
+            fontWeight: 500,
+            width: 'fit-content',
+          }}
+        >
+          Nova operação
+        </div>
+        <Title level={1} style={{ maxWidth: 440, lineHeight: 1.25, marginBottom: 0, fontSize: 40 }}>
+          Crie seu workspace financeiro em minutos.
+        </Title>
+        <Paragraph type="secondary" style={{ fontSize: 15, maxWidth: 400, marginBottom: 0 }}>
+          Autenticação por tenant, integrações bancárias e acompanhamento de transações prontos para
+          uso.
+        </Paragraph>
+      </section>
 
-            <div className="space-y-2">
-              <Label htmlFor="tenantDocument">CNPJ/CPF</Label>
-              <Input
-                id="tenantDocument"
-                name="tenantDocument"
-                placeholder="00.000.000/0000-00"
-                value={formData.tenantDocument}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
-            </div>
+      {/* Form section */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '48px 24px',
+          background: '#fff',
+        }}
+      >
+        <Card style={{ width: '100%', maxWidth: 420, border: '1px solid #f0f0f0' }}>
+          <Title level={3} style={{ marginBottom: 4 }}>
+            Criar Conta
+          </Title>
+          <Text type="secondary">Configure o tenant e o primeiro usuário administrador.</Text>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="seu@email.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
-            </div>
+          <Form form={form} layout="vertical" onFinish={handleFinish} style={{ marginTop: 24 }}>
+            <Form.Item
+              label="Nome da Empresa"
+              name="tenantName"
+              rules={[{ required: true, message: 'Informe o nome da empresa' }]}
+            >
+              <Input prefix={<ShopOutlined />} placeholder="Sua Empresa Ltda" size="large" />
+            </Form.Item>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <Form.Item
+              label="CNPJ / CPF"
+              name="tenantDocument"
+              rules={[{ required: true, message: 'Informe o CNPJ ou CPF' }]}
+            >
+              <Input placeholder="00.000.000/0000-00" size="large" />
+            </Form.Item>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <Form.Item
+              label="Email"
+              name="email"
+              rules={[
+                { required: true, message: 'Informe o email' },
+                { type: 'email', message: 'Email inválido' },
+              ]}
+            >
+              <Input prefix={<MailOutlined />} placeholder="seu@email.com" size="large" />
+            </Form.Item>
 
-            {error && (
-              <div className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
-                {error}
-              </div>
-            )}
+            <Form.Item
+              label="Senha"
+              name="password"
+              rules={[
+                { required: true, message: 'Informe a senha' },
+                { min: 6, message: 'Mínimo 6 caracteres' },
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder="••••••••" size="large" />
+            </Form.Item>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? 'Criando conta...' : 'Criar Conta'}
-            </Button>
+            <Form.Item
+              label="Confirmar Senha"
+              name="confirmPassword"
+              dependencies={['password']}
+              rules={[
+                { required: true, message: 'Confirme a senha' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) return Promise.resolve();
+                    return Promise.reject(new Error('As senhas não correspondem'));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder="••••••••" size="large" />
+            </Form.Item>
 
-            <div className="text-center text-sm">
-              <span className="text-muted-foreground">Já tem uma conta? </span>
-              <Link
-                href="/login"
-                className="text-primary hover:underline font-medium"
-              >
-                Faça login
-              </Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            <Form.Item style={{ marginBottom: 12 }}>
+              <Button type="primary" htmlType="submit" size="large" block>
+                Criar conta
+              </Button>
+            </Form.Item>
+          </Form>
+
+          <div style={{ textAlign: 'center' }}>
+            <Text type="secondary">Já tem uma conta? </Text>
+            <Link href="/login">Entrar</Link>
+          </div>
+
+          <Divider style={{ margin: '16px 0' }} />
+
+          <div style={{ textAlign: 'center' }}>
+            <Link href="/">← Voltar para home</Link>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }
+
