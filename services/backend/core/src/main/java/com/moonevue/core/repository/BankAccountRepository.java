@@ -2,8 +2,6 @@ package com.moonevue.core.repository;
 
 import com.moonevue.core.entity.BankAccount;
 import com.moonevue.core.enums.BankType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -20,4 +18,6 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
 
     Optional<BankAccount> findByTenantIdAndBankAndCdAgencyAndCdAccountAndCdAccountDigit(
             Long tenantId, BankType bank, String cdAgency, String cdAccount, String cdAccountDigit);
+
+        List<BankAccount> findAllByTenantIdOrderByCreatedAtDesc(Long tenantId);
 }

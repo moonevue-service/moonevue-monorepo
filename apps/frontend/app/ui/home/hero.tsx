@@ -1,102 +1,159 @@
-"use client";
+import Link from 'next/link';
+import { Button, Card } from 'antd';
+import {
+  ArrowRightOutlined,
+  BarChartOutlined,
+  SafetyOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 
-import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+const highlights = [
+  {
+    icon: ThunderboltOutlined,
+    title: 'Integração rápida',
+    text: 'Conecte bancos e inicie cobranças sem complexidade técnica.',
+  },
+  {
+    icon: SafetyOutlined,
+    title: 'Sessão segura',
+    text: 'Autenticação por cookie HTTP-only e controles de acesso por tenant.',
+  },
+  {
+    icon: BarChartOutlined,
+    title: 'Visão operacional',
+    text: 'Acompanhe configurações, transações e status em um painel único.',
+  },
+];
 
-interface HeroProps {
-  badge?: string;
-  heading?: string;
-  description?: string;
-  buttons?: {
-    primary?: { text: string; url: string };
-    secondary?: { text: string; url: string };
-  };
+const containerStyle: React.CSSProperties = { maxWidth: 1280, margin: '0 auto', padding: '0 24px' };
+
+export default function Hero() {
+  return (
+    <main>
+      {/* Hero section */}
+      <section style={{ ...containerStyle, paddingTop: 72, paddingBottom: 80 }}>
+        <div
+          style={{
+            maxWidth: 720,
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 24,
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-block',
+              background: '#e6f4ff',
+              color: '#1677ff',
+              padding: '4px 14px',
+              borderRadius: 99,
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            Plataforma de pagamentos SaaS
+          </div>
+          <h1
+            style={{
+              fontSize: 'clamp(32px, 5vw, 56px)',
+              fontWeight: 600,
+              lineHeight: 1.2,
+              color: '#141414',
+              margin: 0,
+            }}
+          >
+            Operação financeira moderna, clara e sem excesso visual.
+          </h1>
+          <p style={{ fontSize: 16, color: '#595959', maxWidth: 540, margin: 0, lineHeight: 1.6 }}>
+            Centralize contas bancárias, integrações e cobranças com uma interface limpa, focada em
+            produtividade e leitura rápida.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Button type="primary" size="large" href="/register">
+              Começar agora
+            </Button>
+            <Button size="large" href="/login" icon={<ArrowRightOutlined />} iconPosition="end">
+              Entrar no painel
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Features section */}
+      <section id="beneficios" style={{ ...containerStyle, paddingBottom: 80 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: 16,
+          }}
+        >
+          {highlights.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.title} style={{ border: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: '#e6f4ff',
+                      color: '#1677ff',
+                      borderRadius: 8,
+                      padding: 10,
+                      width: 'fit-content',
+                    }}
+                  >
+                    <Icon style={{ fontSize: 18 }} />
+                  </div>
+                  <strong style={{ fontSize: 15 }}>{item.title}</strong>
+                  <p style={{ color: '#595959', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+                    {item.text}
+                  </p>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* CTA section */}
+      <section id="integracoes" style={{ ...containerStyle, paddingBottom: 96 }}>
+        <Card
+          style={{
+            background: '#f0f5ff',
+            border: '1px solid #d6e4ff',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 16,
+            }}
+          >
+            <div>
+              <p
+                style={{ color: '#1677ff', fontSize: 13, fontWeight: 500, margin: '0 0 4px 0' }}
+              >
+                Pronto para escalar
+              </p>
+              <strong style={{ fontSize: 16 }}>Estrutura modular para auth, gateway e finance</strong>
+              <p style={{ color: '#595959', fontSize: 14, margin: '8px 0 0 0' }}>
+                Arquitetura separada por serviço para evoluir o produto sem comprometer a
+                experiência do usuário.
+              </p>
+            </div>
+            <Button href="/login">Ver dashboard</Button>
+          </div>
+        </Card>
+      </section>
+    </main>
+  );
 }
 
-const Hero = ({
-  badge = "Gestão Financeira Inteligente",
-  heading = "Centralize pagamentos e controle financeiro em um só lugar",
-  description = "Automatize integrações bancárias, visualize métricas e tome decisões rápidas. Experimente o futuro da gestão financeira!",
-  buttons = {
-    primary: {
-      text: "Ver documentação",
-      url: "/docs",
-    },
-    secondary: {
-      text: "Acessar Sandbox",
-      url: "/sandbox",
-    },
-  },
-}: HeroProps) => {
-  // 3 imagens fixas
-  const floatingImages = [
-    { img: "/img (2).png", top: "10%", left: "5%", size: 200, duration: 8 },
-    { img: "/img (10).png", top: "40%", left: "80%", size: 250, duration: 10 },
-    { img: "/img (5).png", top: "70%", left: "20%", size: 220, duration: 9 },
-  ];
-
-  return (
-    <section className="relative flex flex-col items-center justify-center text-center py-32 px-4 overflow-hidden">
-      {badge && (
-        <Badge variant="outline" className="mb-4 flex items-center gap-2 z-10">
-          {badge}
-          <ArrowUpRight className="size-4" />
-        </Badge>
-      )}
-
-      <h1 className="my-6 text-pretty text-4xl font-bold lg:text-6xl max-w-4xl z-10">
-        {heading}
-      </h1>
-
-      <p className="text-muted-foreground mb-8 max-w-2xl text-lg lg:text-xl z-10">
-        {description}
-      </p>
-
-      <div className="flex flex-col sm:flex-row gap-3 justify-center z-10">
-        {buttons.primary && (
-          <Button asChild className="w-full sm:w-auto">
-            <a href={buttons.primary.url}>{buttons.primary.text}</a>
-          </Button>
-        )}
-        {buttons.secondary && (
-          <Button asChild variant="outline" className="w-full sm:w-auto">
-            <a href={buttons.secondary.url}>
-              {buttons.secondary.text}
-              <ArrowRight className="ml-2 size-4" />
-            </a>
-          </Button>
-        )}
-      </div>
-
-      {/* Imagens flutuantes */}
-      {floatingImages.map(({ img, top, left, size, duration }, idx) => (
-        <motion.img
-          key={idx}
-          src={img}
-          alt={`floating-${idx}`}
-          className="absolute"
-          style={{
-            top,
-            left,
-            width: `${size}px`,
-            height: "auto",
-          }}
-          animate={{
-            y: [0, -30, 0], // flutuação vertical maior
-            x: [0, 20, -20, 0], // leve movimento horizontal
-          }}
-          transition={{
-            duration,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </section>
-  );
-};
-
-export default Hero;

@@ -16,6 +16,8 @@ import com.moonevue.gateway.service.OAuthTokenService;
 import com.moonevue.gateway.service.bank.BankIntegration;
 import com.moonevue.gateway.util.ExtraConfigUtils;
 import org.apache.hc.core5.http.Method;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -23,6 +25,8 @@ import java.util.*;
 
 @Component
 public class EfiBankIntegration implements BankIntegration {
+
+    private static final Logger log = LoggerFactory.getLogger(EfiBankIntegration.class);
 
     private final RequestSenderFactory senderFactory;
     private final OAuthTokenService tokenService;
@@ -66,8 +70,15 @@ public class EfiBankIntegration implements BankIntegration {
                 default -> throw new IllegalArgumentException("Instrumento não suportado: " + instrument);
             }
         } catch (Exception e) {
+            log.error("[EFI] Falha ao processar pagamento. instrument={} configId={} erro={}",
+                    tryGetInstrument(payload), cfg.getId(), e.getMessage(), e);
             throw new RuntimeException("Erro na integração EFI: " + e.getMessage(), e);
         }
+    }
+
+    private String tryGetInstrument(String payload) {
+        try { return mapper.readTree(payload).path("payment").path("instrument").asText("?"); }
+        catch (Exception ignored) { return "?"; }
     }
 
     // ===================== PIX =====================
@@ -76,12 +87,12 @@ public class EfiBankIntegration implements BankIntegration {
         EnvUrls urls = getPixUrls(cfg);
 
         // Credenciais namespaced (pix.*)
-        String clientId = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.CLIENT_ID, "client_id");
-        String clientSecret = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.CLIENT_SECRET, "client_secret");
-        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), BankConfigKeys.SCOPE, null);
+        String clientId = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_ID, "pix.client_id");
+        String clientSecret = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_SECRET, "pix.client_secret");
+        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.SCOPE, null);
         OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
 
-        // Token PIX (mTLS obrigatório): OAuthTokenService já usa a fábrica; garantimos lá também (ver abaixo)
+        log.info("[EFI] PIX Imediato: tokenUrl={} env={}", urls.tokenUrl, cfg.getEnvironment());
         AccessToken token = tokenService.getTokenFor(BankType.EFI, urls.tokenUrl, creds, cfg);
 
         // Monta body

@@ -9,12 +9,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/tenant/{tenantId}/bank-account")
 public class BankAccountController {
 
     private final BankAccountService bankAccountService;
+
+    @GetMapping
+    public ResponseEntity<List<BankAccountResponse>> list(@PathVariable("tenantId") Long tenantId) {
+        return ResponseEntity.ok(bankAccountService.listByTenant(tenantId));
+    }
 
     @PostMapping
     public ResponseEntity<BankAccountResponse> create(@PathVariable("tenantId") Long tenantId,

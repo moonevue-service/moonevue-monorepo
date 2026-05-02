@@ -22,19 +22,38 @@ public class CertificateHttpClientFactory {
                 throw new IllegalArgumentException("Arquivo de certificado não encontrado: " + p12Path);
             }
 
-            char[] password = bankConfiguration.getCertificatePassword() != null
+            // Tenta null e empty char[] para certificados sem senha
+            char[] rawPassword = bankConfiguration.getCertificatePassword() != null
                     ? bankConfiguration.getCertificatePassword().toCharArray()
-                    : new char[0];
+                    : null;
+            char[][] candidates = rawPassword != null
+                    ? new char[][]{rawPassword, null, new char[0]}
+                    : new char[][]{null, new char[0]};
 
-            // Carrega o KeyStore PKCS12 do cliente
-            KeyStore keyStore = KeyStore.getInstance("PKCS12");
-            try (FileInputStream fis = new FileInputStream(p12Path.toFile())) {
-                keyStore.load(fis, password);
+            KeyStore keyStore = null;
+            char[] usedPassword = null;
+            Exception lastEx = null;
+            for (char[] attempt : candidates) {
+                try {
+                    KeyStore ks = KeyStore.getInstance("PKCS12");
+                    try (FileInputStream fis = new FileInputStream(p12Path.toFile())) {
+                        ks.load(fis, attempt);
+                    }
+                    keyStore = ks;
+                    usedPassword = attempt;
+                    break;
+                } catch (Exception e) {
+                    lastEx = e;
+                }
+            }
+            if (keyStore == null) {
+                throw new IllegalArgumentException("Falha ao carregar certificado PKCS12: " +
+                        (lastEx != null ? lastEx.getMessage() : "erro desconhecido"), lastEx);
             }
 
             // Monta o SSLContext com material de chave do cliente
             SSLContext sslContext = SSLContexts.custom()
-                    .loadKeyMaterial(keyStore, password) // chave privada do cliente
+                    .loadKeyMaterial(keyStore, usedPassword) // chave privada do cliente
                     // .loadTrustMaterial(TrustAllStrategy.INSTANCE) // NÃO recomendado: confia em todos
                     .build();
 

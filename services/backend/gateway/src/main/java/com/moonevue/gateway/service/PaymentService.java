@@ -12,7 +12,13 @@ import com.moonevue.core.repository.TransactionLogRepository;
 import com.moonevue.core.repository.TransactionRepository;
 import com.moonevue.gateway.dto.ChargeRequestDTO;
 import com.moonevue.gateway.dto.ChargeResponseDTO;
+import com.moonevue.gateway.dto.TransactionSummaryDTO;
 import com.moonevue.gateway.service.bank.BankIntegration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +28,8 @@ import java.util.Map;
 
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     private final BankIntegrationFactory factory;
     private final ObjectMapper objectMapper;
     private final BankConfigurationRepository bankConfigurationRepository;
@@ -40,26 +48,53 @@ public class PaymentService {
         this.transactionLogRepository = transactionLogRepository;
     }
 
+    @Transactional(readOnly = true)
+    public Page<TransactionSummaryDTO> listTransactions(Long tenantId, int page, int size) {
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return transactionRepository.findByTenantId(tenantId, pageable)
+                .map(t -> new TransactionSummaryDTO(
+                        t.getId(),
+                        t.getAmount(),
+                        t.getStatus(),
+                        t.getType(),
+                        t.getDescription(),
+                        t.getExternalReference(),
+                        t.getBankAccount().getBank() != null ? t.getBankAccount().getBank().name() : null,
+                        t.getCreatedAt()
+                ));
+    }
+
     @Transactional
     public String create(ChargeRequestDTO request) {
+        ChargeResponseDTO response = createCharge(request);
+        return serialize(response);
+    }
+
+    @Transactional
+    public ChargeResponseDTO createCharge(ChargeRequestDTO request) {
         BankIntegration integration = factory.getIntegration(request.bank());
         BankConfiguration config = bankConfigurationRepository.findById(request.bankConfigurationId())
                 .orElseThrow(() -> new IllegalArgumentException("BankConfiguration não encontrada: " + request.bankConfigurationId()));
+
+        log.info("[PaymentService] createCharge bank={} configId={} instrument={}",
+                request.bank(), request.bankConfigurationId(), request.payment().instrument());
 
         // 1) Prepara dados para persistência
         BigDecimal amount = extractAmount(request);
         String payloadJson = serialize(request);
 
         // 2) Chama o provedor
-        String responseJson = integration.processPayment(payloadJson, config);
-
-        // 3) Converte resposta padrão (se possível)
-        ChargeResponseDTO resp = null;
+        String responseJson;
         try {
-            resp = objectMapper.readValue(responseJson, ChargeResponseDTO.class);
-        } catch (Exception ignored) {
-            // Se não conseguiu parsear, ainda assim seguiremos com a persistência básica
+            responseJson = integration.processPayment(payloadJson, config);
+        } catch (Exception e) {
+            log.error("[PaymentService] Falha na integração bank={} configId={} instrument={}: {}",
+                    request.bank(), request.bankConfigurationId(), request.payment().instrument(), e.getMessage(), e);
+            throw e;
         }
+
+        // 3) Converte resposta padronizada da integração
+        ChargeResponseDTO resp = parseChargeResponse(responseJson);
 
         // 4) Persiste Transaction
         Transaction tx = new Transaction();
@@ -70,8 +105,8 @@ public class PaymentService {
         tx.setStatus(TransactionStatus.PENDING); // ficará 'PENDING' até confirmação via webhook/consulta
         tx.setDescription("Cobrança " + request.payment().instrument().name());
 
-        // externalReference = id padronizado (txid no PIX / charge_id no boleto) se houver
-        if (resp != null && resp.getId() != null) {
+        // externalReference = id padronizado (txid no PIX / charge_id no boleto)
+        if (resp.getId() != null) {
             tx.setExternalReference(resp.getId());
         }
 
@@ -88,19 +123,17 @@ public class PaymentService {
         Map<String, Object> md = new HashMap<>();
         md.put("provider", request.bank().name());
         md.put("instrument", request.payment().instrument().name());
-        if (resp != null) {
-            md.put("providerId", resp.getId());
-            md.put("status", resp.getStatus());
-            md.put("amount", resp.getAmount());
-            md.put("locId", resp.getLocId());
-            md.put("location", resp.getLocation());
-        }
+        md.put("providerId", resp.getId());
+        md.put("status", resp.getStatus());
+        md.put("amount", resp.getAmount());
+        md.put("locId", resp.getLocId());
+        md.put("location", resp.getLocation());
         log.setMetadata(md);
 
         transactionLogRepository.save(log);
 
-        // 6) Retorna a resposta original do provedor (padronizada pela integração)
-        return responseJson;
+        // 6) Retorna a resposta padronizada pela integração
+        return resp;
     }
 
     private String serialize(Object obj) {
@@ -124,6 +157,14 @@ public class PaymentService {
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
             default:
                 throw new IllegalArgumentException("Instrumento não suportado para cálculo de amount.");
+        }
+    }
+
+    private ChargeResponseDTO parseChargeResponse(String responseJson) {
+        try {
+            return objectMapper.readValue(responseJson, ChargeResponseDTO.class);
+        } catch (Exception e) {
+            throw new IllegalStateException("Resposta do provedor em formato inválido.", e);
         }
     }
 }

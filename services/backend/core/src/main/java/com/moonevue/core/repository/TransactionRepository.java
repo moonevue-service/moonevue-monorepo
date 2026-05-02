@@ -15,6 +15,14 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    @Query("""
+           select t from Transaction t
+           join fetch t.bankAccount ba
+           where t.tenant.id = :tenantId
+           order by t.createdAt desc
+           """)
+    Page<Transaction> findByTenantId(@Param("tenantId") Long tenantId, Pageable pageable);
+
     // Agregações corrigindo o path property para bankAccount
     @Query("""
            select coalesce(sum(t.amount), 0)

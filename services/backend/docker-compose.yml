@@ -73,7 +73,7 @@ services:
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl auth -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/auth/target/auth-1.0.0.jar
       '
     depends_on:
@@ -118,7 +118,7 @@ services:
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl gateway -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/gateway/target/gateway.jar
       '
     depends_on:
@@ -158,13 +158,13 @@ services:
     volumes:
       - .:/app/moonevue
       - maven_cache:/root/.m2
-      - ./certs:/data/certs:ro
+      - ./certs:/data/certs                # escrita habilitada para upload de certificados
     working_dir: /app/moonevue
     command: >
       sh -lc '
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
-        mvn -q -DskipTests install;
+        mvn -q -DskipTests install -pl finance -am;
         java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/finance/target/finance.jar
       '
     depends_on:

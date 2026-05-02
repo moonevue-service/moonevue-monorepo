@@ -1,134 +1,205 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { Avatar, Button, Drawer, Dropdown, Flex, Layout, Menu, theme, Typography } from 'antd';
 import {
-  Menu,
-  X,
-  LogOut,
-  LayoutDashboard,
-  Banknote,
-  CreditCard,
-  Settings,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+  AppstoreOutlined,
+  BankOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  SettingOutlined,
+  SwapOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useAuth } from '@/app/providers';
 import { ProtectedRoute } from '@/app/protected-route';
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+const { Header, Sider, Content } = Layout;
+const { Text } = Typography;
 
-const menuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/bank-accounts', label: 'Contas Bancárias', icon: Banknote },
-  { href: '/dashboard/transactions', label: 'Transações', icon: CreditCard },
-  { href: '/dashboard/settings', label: 'Configurações', icon: Settings },
+const navItems = [
+  { key: '/dashboard', label: 'Visão Geral', icon: <AppstoreOutlined /> },
+  { key: '/dashboard/bank-accounts', label: 'Contas Bancárias', icon: <BankOutlined /> },
+  { key: '/dashboard/transactions', label: 'Transações', icon: <SwapOutlined /> },
+  { key: '/dashboard/settings', label: 'Configurações', icon: <SettingOutlined /> },
 ];
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const router = useRouter();
+function SidebarContent({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate: (key: string) => void;
+}) {
+  const { token } = theme.useToken();
+  return (
+    <>
+      <Flex
+        align="center"
+        style={{
+          height: 64,
+          paddingLeft: 24,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          flexShrink: 0,
+        }}
+      >
+        <Link
+          href="/dashboard"
+          style={{ color: token.colorPrimary, fontWeight: 700, fontSize: 16, textDecoration: 'none' }}
+        >
+          Moonevue
+        </Link>
+      </Flex>
+      <Menu
+        mode="inline"
+        selectedKeys={[pathname]}
+        items={navItems}
+        style={{ border: 'none', marginTop: 8, flex: 1 }}
+        onClick={({ key }) => onNavigate(key)}
+      />
+    </>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { logout, user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const { token } = theme.useToken();
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleLogout = async () => {
-    setIsLoggingOut(true);
     try {
       await logout();
+    } finally {
       router.push('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-      setIsLoggingOut(false);
     }
+  };
+
+  const handleNavigate = (key: string) => {
+    router.push(key);
+    setDrawerOpen(false);
+  };
+
+  const userMenu = {
+    items: [
+      { key: 'email', label: <Text type="secondary" style={{ fontSize: 12 }}>{user?.email}</Text>, disabled: true },
+      { type: 'divider' as const },
+      { key: 'logout', label: 'Sair', icon: <LogoutOutlined />, danger: true },
+    ],
+    onClick: ({ key }: { key: string }) => key === 'logout' && handleLogout(),
+  };
+
+  const headerStyle: React.CSSProperties = {
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
+    background: '#fff',
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 24px',
+    gap: 12,
+    height: 64,
   };
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-background">
-        {/* Sidebar */}
-        <aside
-          className={`${
-            isSidebarOpen ? 'w-64' : 'w-0'
-          } border-r transition-all duration-300 overflow-hidden bg-muted/50`}
+      <Layout style={{ minHeight: '100vh' }}>
+        {/* Desktop sidebar */}
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          trigger={null}
+          width={220}
+          style={{
+            background: '#fff',
+            borderRight: `1px solid ${token.colorBorderSecondary}`,
+            overflow: 'auto',
+            height: '100vh',
+            position: 'sticky',
+            top: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          breakpoint="md"
+          collapsedWidth={0}
+          onBreakpoint={(broken) => setCollapsed(broken)}
+          className="hidden md:block"
         >
-          <div className="p-6 border-b h-16 flex items-center">
-            <h1 className="text-xl font-bold text-primary">Moonevue</h1>
-          </div>
+          <SidebarContent pathname={pathname} onNavigate={handleNavigate} />
+        </Sider>
 
-          <nav className="p-4 space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+        {/* Mobile drawer */}
+        <Drawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          placement="left"
+          width={220}
+          styles={{ body: { padding: 0 }, header: { display: 'none' } }}
+          className="md:hidden"
+        >
+          <Flex vertical style={{ height: '100%' }}>
+            <SidebarContent pathname={pathname} onNavigate={handleNavigate} />
+          </Flex>
+        </Drawer>
 
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-muted/30">
-            <div className="flex items-center gap-2 mb-3 px-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">
-                  {user?.email?.[0].toUpperCase() || '?'}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-              </div>
-            </div>
+        <Layout>
+          <Header style={headerStyle}>
+            {/* Desktop: collapse toggle */}
             <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sair
-            </Button>
-          </div>
-        </aside>
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              className="hidden md:flex"
+            />
+            {/* Mobile: drawer toggle */}
+            <Button
+              type="text"
+              icon={<MenuUnfoldOutlined />}
+              onClick={() => setDrawerOpen(true)}
+              className="flex md:hidden"
+            />
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Top Bar */}
-          <header className="border-b bg-card h-16 flex items-center px-6 gap-4">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-muted rounded-lg transition-colors"
-            >
-              {isSidebarOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
-            </button>
-            <div className="flex-1" />
-            <div className="text-sm text-muted-foreground">
-              Tenant ID: {user?.tenantId}
-            </div>
-          </header>
+            <div style={{ flex: 1 }} />
 
-          {/* Content */}
-          <main className="flex-1 overflow-auto">
-            <div className="p-6">{children}</div>
-          </main>
-        </div>
-      </div>
+            <Dropdown menu={userMenu} placement="bottomRight">
+              <Flex align="center" gap={8} style={{ cursor: 'pointer' }}>
+                <Avatar
+                  size="small"
+                  icon={<UserOutlined />}
+                  style={{ backgroundColor: token.colorPrimary }}
+                />
+                <Text
+                  style={{ fontSize: 14, maxWidth: 200 }}
+                  ellipsis
+                  className="hidden sm:block"
+                >
+                  {user?.email}
+                </Text>
+              </Flex>
+            </Dropdown>
+          </Header>
+
+          <Content
+            style={{
+              padding: 24,
+              background: token.colorBgLayout,
+              minHeight: 'calc(100vh - 64px)',
+            }}
+          >
+            <div style={{ maxWidth: 1200, margin: '0 auto' }}>{children}</div>
+          </Content>
+        </Layout>
+      </Layout>
     </ProtectedRoute>
   );
 }
+
+
+
+

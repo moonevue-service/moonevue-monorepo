@@ -28,18 +28,38 @@ public class InsecureCertificateHttpClientFactory {
             if (!Files.exists(p12Path)) {
                 throw new IllegalArgumentException("Arquivo de certificado do cliente não encontrado: " + p12Path);
             }
-            char[] keyPass = bankConfiguration.getCertificatePassword() != null
-                    ? bankConfiguration.getCertificatePassword().toCharArray()
-                    : new char[0];
 
-            KeyStore clientKeyStore = KeyStore.getInstance("PKCS12");
-            try (FileInputStream fis = new FileInputStream(p12Path.toFile())) {
-                clientKeyStore.load(fis, keyPass);
+            char[] rawPass = bankConfiguration.getCertificatePassword() != null
+                    ? bankConfiguration.getCertificatePassword().toCharArray()
+                    : null;
+            char[][] candidates = rawPass != null
+                    ? new char[][]{rawPass, null, new char[0]}
+                    : new char[][]{null, new char[0]};
+
+            KeyStore clientKeyStore = null;
+            char[] usedPass = null;
+            Exception lastEx = null;
+            for (char[] attempt : candidates) {
+                try {
+                    KeyStore ks = KeyStore.getInstance("PKCS12");
+                    try (FileInputStream fis = new FileInputStream(p12Path.toFile())) {
+                        ks.load(fis, attempt);
+                    }
+                    clientKeyStore = ks;
+                    usedPass = attempt;
+                    break;
+                } catch (Exception e) {
+                    lastEx = e;
+                }
+            }
+            if (clientKeyStore == null) {
+                throw new IllegalArgumentException("Falha ao carregar certificado PKCS12: " +
+                        (lastEx != null ? lastEx.getMessage() : "erro desconhecido"), lastEx);
             }
 
             // TrustAll + NoopHostnameVerifier (inseguro)
             SSLContext sslContext = SSLContexts.custom()
-                    .loadKeyMaterial(clientKeyStore, keyPass)       // certificado do cliente (mTLS)
+                    .loadKeyMaterial(clientKeyStore, usedPass)      // certificado do cliente (mTLS)
                     .loadTrustMaterial(TrustAllStrategy.INSTANCE)   // confia em todos os servidores
                     .build();
 

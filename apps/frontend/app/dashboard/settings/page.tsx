@@ -1,189 +1,168 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+  App,
+  Button,
+  Card,
+  Descriptions,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
+import { CheckOutlined, CopyOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuth } from '@/app/providers';
 import { useRouter } from 'next/navigation';
-import { Loader2, Copy, Check } from 'lucide-react';
+
+const { Title, Text, Paragraph } = Typography;
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
+  const { modal } = App.useApp();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await logout();
-      router.push('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-      setIsLoggingOut(false);
-    }
-  };
-
-  const handleCopyTenantId = async () => {
+  const copyTenantId = async () => {
     if (user?.tenantId) {
-      await navigator.clipboard.writeText(user.tenantId.toString());
+      await navigator.clipboard.writeText(String(user.tenantId));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
+  const handleLogout = () => {
+    modal.confirm({
+      title: 'Encerrar sessão',
+      content: 'Você será desconectado e precisará fazer login novamente.',
+      okText: 'Sair',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      async onOk() {
+        setLoggingOut(true);
+        try {
+          await logout();
+          router.push('/login');
+        } catch {
+          router.push('/login');
+        } finally {
+          setLoggingOut(false);
+        }
+      },
+    });
+  };
+
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 800 }}>
       <div>
-        <h1 className="text-3xl font-bold">Configurações</h1>
-        <p className="text-muted-foreground">Gerencie sua conta e preferências</p>
+        <Title level={3} style={{ marginBottom: 4 }}>
+          Configurações
+        </Title>
+        <Text type="secondary">Gerencie identidade da conta, segurança e dados de integração.</Text>
       </div>
 
-      {/* Account Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informações da Conta</CardTitle>
-          <CardDescription>
-            Seus dados de conta e identificadores
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <div className="p-3 bg-muted rounded-md font-medium">{user?.email}</div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tenant ID</Label>
-            <div className="flex gap-2">
-              <div className="flex-1 p-3 bg-muted rounded-md font-mono text-sm">
-                {user?.tenantId}
-              </div>
+      <Card title="Informações da Conta">
+        <Descriptions column={1} size="default" bordered>
+          <Descriptions.Item label="Email">{user?.email}</Descriptions.Item>
+          <Descriptions.Item label="Tenant ID">
+            <Space>
+              <Text code>{user?.tenantId}</Text>
               <Button
-                variant="outline"
-                size="icon"
-                onClick={handleCopyTenantId}
+                type="text"
+                size="small"
+                icon={
+                  copied ? (
+                    <CheckOutlined style={{ color: '#52c41a' }} />
+                  ) : (
+                    <CopyOutlined />
+                  )
+                }
+                onClick={copyTenantId}
               >
-                {copied ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
+                {copied ? 'Copiado' : 'Copiar'}
               </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Papéis</Label>
-            <div className="flex flex-wrap gap-2">
-              {user?.roles && user.roles.length > 0 ? (
-                user.roles.map((role) => (
-                  <span
-                    key={role}
-                    className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium"
-                  >
-                    {role}
-                  </span>
+            </Space>
+          </Descriptions.Item>
+          <Descriptions.Item label="Papéis">
+            <Space wrap>
+              {user?.roles?.length ? (
+                user.roles.map((r) => (
+                  <Tag key={r} color="blue">
+                    {r}
+                  </Tag>
                 ))
               ) : (
-                <span className="text-muted-foreground">Nenhum papel atribuído</span>
+                <Text type="secondary">Nenhum papel atribuído</Text>
               )}
-            </div>
-          </div>
-        </CardContent>
+            </Space>
+          </Descriptions.Item>
+        </Descriptions>
       </Card>
 
-      {/* Security */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Segurança</CardTitle>
-          <CardDescription>
-            Gerenciar segurança da sua conta
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-900 dark:text-blue-100">
-              💡 Para trocar sua senha, saia da conta e use a opção de recuperação de senha na página de login.
-            </p>
-          </div>
-
+      <Card title="Segurança">
+        <Space direction="vertical" style={{ width: '100%', gap: 16 }}>
           <div>
-            <h4 className="font-medium mb-2">Sessão Ativa</h4>
-            <p className="text-sm text-muted-foreground mb-3">
-              Sua sessão será automaticamente renovada a cada interação
-            </p>
+            <Text strong>Sessão Ativa</Text>
+            <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
+              Sua sessão é gerenciada via cookie HTTP-only e renovada automaticamente a cada 5
+              minutos de atividade.
+            </Paragraph>
           </div>
-        </CardContent>
+          <div>
+            <Text strong>Alterar Senha</Text>
+            <Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
+              Para trocar sua senha, saia da conta e utilize a opção de recuperação na página de
+              login.
+            </Paragraph>
+          </div>
+        </Space>
       </Card>
 
-      {/* API Integration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Integração com API</CardTitle>
-          <CardDescription>
-            Use seus identificadores para integrar com a API
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="p-3 bg-muted rounded-lg text-sm font-mono overflow-auto">
-            <div>Authorization: Cookie sid=&lt;session_id&gt;</div>
+      <Card title="Integração com API">
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Paragraph type="secondary">
+            A autenticação é gerenciada via cookie de sessão. Inclua o cookie em todas as
+            requisições.
+          </Paragraph>
+          <div
+            style={{
+              background: '#f6f8fa',
+              border: '1px solid #e6e9ed',
+              borderRadius: 6,
+              padding: '12px 16px',
+              fontFamily: 'monospace',
+              fontSize: 13,
+            }}
+          >
+            Cookie: sid=&lt;session_id&gt;
           </div>
-          <p className="text-sm text-muted-foreground">
-            Sua session é gerenciada automaticamente via cookies. Use os endpoints da API com suas credenciais.
-          </p>
-        </CardContent>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            Use <Text code>credentials: &apos;include&apos;</Text> em todas as chamadas fetch para
+            que o cookie seja enviado automaticamente.
+          </Paragraph>
+        </Space>
       </Card>
 
-      {/* Danger Zone */}
-      <Card className="border-destructive/20">
-        <CardHeader>
-          <CardTitle className="text-destructive">Zona de Perigo</CardTitle>
-          <CardDescription>
-            Ações que não podem ser desfeitas
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-medium mb-2">Sair da Conta</h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              Você será desconectado e precisará fazer login novamente
-            </p>
-            <Button
-              variant="destructive"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoggingOut ? 'Saindo...' : 'Sair da Conta'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Help */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Precisa de Ajuda?</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <h4 className="font-medium mb-1">Documentação</h4>
-            <p className="text-sm text-muted-foreground">
-              Consulte nossa documentação completa por mais informações
-            </p>
-          </div>
-          <div>
-            <h4 className="font-medium mb-1">Suporte</h4>
-            <p className="text-sm text-muted-foreground">
-              Entre em contato com nosso time de suporte para dúvidas
-            </p>
-          </div>
-        </CardContent>
+      <Card
+        title={<Text type="danger">Zona de Perigo</Text>}
+        style={{ borderColor: 'rgba(255, 77, 79, 0.2)' }}
+      >
+        <Space direction="vertical">
+          <Text strong>Encerrar Sessão</Text>
+          <Paragraph type="secondary">
+            Você será desconectado e precisará fazer login novamente para acessar o painel.
+          </Paragraph>
+          <Button
+            danger
+            icon={<LogoutOutlined />}
+            onClick={handleLogout}
+            loading={loggingOut}
+          >
+            Sair da Conta
+          </Button>
+        </Space>
       </Card>
     </div>
   );
 }
+

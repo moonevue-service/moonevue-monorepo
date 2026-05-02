@@ -22,6 +22,12 @@ public class BankConfigurationController {
 
     private final BankConfigurationService bankConfigurationService;
 
+    @GetMapping
+    public ResponseEntity<java.util.List<BankConfigurationResponse>> list(@PathVariable("tenantId") Long tenantId,
+                                                                           @PathVariable("bankAccountId") Long bankAccountId) {
+        return ResponseEntity.ok(bankConfigurationService.list(tenantId, bankAccountId));
+    }
+
     @PostMapping
     public ResponseEntity<BankConfigurationResponse> create(@PathVariable("tenantId") Long tenantId,
                                                             @PathVariable("bankAccountId") Long bankAccountId,

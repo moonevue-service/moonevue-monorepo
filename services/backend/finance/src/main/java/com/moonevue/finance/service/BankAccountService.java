@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class BankAccountService {
@@ -37,6 +39,14 @@ public class BankAccountService {
 
         bankAccounts.save(b);
         return BankAccountResponse.from(b);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BankAccountResponse> listByTenant(Long tenantId) {
+        return bankAccounts.findAllByTenantIdOrderByCreatedAtDesc(tenantId)
+                .stream()
+                .map(BankAccountResponse::from)
+                .toList();
     }
 
     @Transactional(readOnly = true)

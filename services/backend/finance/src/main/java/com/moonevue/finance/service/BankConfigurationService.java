@@ -27,6 +27,14 @@ public class BankConfigurationService {
     private final BankAccountRepository bankAccounts;
     private final CertificateStorageService certificateStorageService;
 
+    @Transactional(readOnly = true)
+    public java.util.List<BankConfigurationResponse> list(Long tenantId, Long bankAccountId) {
+        bankAccounts.findByIdAndTenantId(bankAccountId, tenantId)
+                .orElseThrow(() -> new NotFoundException("Bank account not found for tenant"));
+        return bankConfigs.findByTenantIdAndBankAccountId(tenantId, bankAccountId)
+                .stream().map(BankConfigurationResponse::from).toList();
+    }
+
     @Transactional
     public BankConfigurationResponse create(Long tenantId, Long bankAccountId, BankConfigurationRequest req) {
         BankAccount bankAccount = bankAccounts.findByIdAndTenantId(bankAccountId, tenantId)
@@ -111,40 +119,56 @@ public class BankConfigurationService {
     }
 
     private void validatePkcs12(byte[] bytes, char[] pass) {
-        try {
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (var in = new ByteArrayInputStream(bytes)) {
-                ks.load(in, pass);
+        Exception last = null;
+        for (char[] attempt : candidatePasswords(pass)) {
+            try {
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                try (var in = new ByteArrayInputStream(bytes)) {
+                    ks.load(in, attempt);
+                }
+                if (!ks.aliases().hasMoreElements()) {
+                    throw new IllegalArgumentException("PKCS12 sem aliases");
+                }
+                return; // válido
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } catch (Exception e) {
+                last = e;
             }
-            // Checagem básica: pelo menos um alias com chave ou certificado
-            Enumeration<String> aliases = ks.aliases();
-            if (!aliases.hasMoreElements()) {
-                throw new IllegalArgumentException("PKCS12 sem aliases");
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Falha ao validar PKCS12: " + e.getMessage(), e);
         }
+        throw new IllegalArgumentException("Falha ao validar PKCS12: " + (last != null ? last.getMessage() : "erro desconhecido"), last);
+    }
+
+    /** Retorna as senhas a tentar na ordem: a informada, null, empty. Sem duplicatas. */
+    private char[][] candidatePasswords(char[] pass) {
+        if (pass == null || pass.length == 0) {
+            return new char[][]{null, new char[0]};
+        }
+        return new char[][]{pass, null, new char[0]};
     }
 
     private Instant extractEarliestExpiry(byte[] bytes, char[] pass) {
-        try {
-            KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (var in = new ByteArrayInputStream(bytes)) {
-                ks.load(in, pass);
-            }
-            Instant earliest = null;
-            Enumeration<String> aliases = ks.aliases();
-            while (aliases.hasMoreElements()) {
-                var alias = aliases.nextElement();
-                var cert = ks.getCertificate(alias);
-                if (cert instanceof java.security.cert.X509Certificate x509) {
-                    Instant exp = x509.getNotAfter().toInstant();
-                    if (earliest == null || exp.isBefore(earliest)) earliest = exp;
+        for (char[] attempt : candidatePasswords(pass)) {
+            try {
+                KeyStore ks = KeyStore.getInstance("PKCS12");
+                try (var in = new ByteArrayInputStream(bytes)) {
+                    ks.load(in, attempt);
                 }
+                Instant earliest = null;
+                Enumeration<String> aliases = ks.aliases();
+                while (aliases.hasMoreElements()) {
+                    var alias = aliases.nextElement();
+                    var cert = ks.getCertificate(alias);
+                    if (cert instanceof java.security.cert.X509Certificate x509) {
+                        Instant exp = x509.getNotAfter().toInstant();
+                        if (earliest == null || exp.isBefore(earliest)) earliest = exp;
+                    }
+                }
+                return earliest;
+            } catch (Exception ignored) {
+                // tenta próxima senha
             }
-            return earliest;
-        } catch (Exception e) {
-            return null; // não bloqueia retorno se falhar
         }
+        return null;
     }
 }

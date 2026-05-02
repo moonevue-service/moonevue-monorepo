@@ -48,7 +48,7 @@
         <swagger.version>2.8.13</swagger.version>
 
         <!-- Swagger -->
-        <logback.version>8.0</logback.version>
+        <logstash.encoder.version>8.0</logstash.encoder.version>
     </properties>
 
     <dependencyManagement>
@@ -119,7 +119,7 @@
             <dependency>
                 <groupId>net.logstash.logback</groupId>
                 <artifactId>logstash-logback-encoder</artifactId>
-                <version>${logback.version}</version>
+                <version>${logstash.encoder.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
