@@ -40,6 +40,10 @@ moonevue:
 banks:
   efi:
     production: false
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
 # Perfil docker (ativado via SPRING_PROFILES_ACTIVE=docker no docker-compose)
 ---
 spring:

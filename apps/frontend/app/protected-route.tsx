@@ -1,28 +1,26 @@
 'use client';
 
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/providers';
-import { Flex, Spin } from 'antd';
+import { Loader2 } from 'lucide-react';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  if (isLoading || !isAuthenticated) {
+  if (isLoading) {
     return (
-      <Flex justify="center" align="center" style={{ minHeight: '100vh' }}>
-        <Spin size="large" />
-      </Flex>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    router.push('/login');
+    return null;
   }
 
   return <>{children}</>;
 }
-

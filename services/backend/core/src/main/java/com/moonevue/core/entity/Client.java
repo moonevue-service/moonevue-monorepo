@@ -1,7 +1,6 @@
 package com.moonevue.core.entity;
 
 import com.moonevue.core.enums.ClientStatus;
-import com.moonevue.core.value.Address;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,9 +10,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashSet;
-import java.util.Set;
-
 @Getter
 @Setter
 @Entity
@@ -49,9 +45,6 @@ public class Client {
     @Size(max = 20)
     @Column(name = "phone", length = 20)
     private String phone;
-
-    @Embedded
-    private Address address = new Address();
 
     @Enumerated(EnumType.STRING)
     @NotNull

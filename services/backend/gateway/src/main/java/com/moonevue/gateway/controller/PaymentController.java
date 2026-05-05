@@ -2,6 +2,7 @@ package com.moonevue.gateway.controller;
 
 import com.moonevue.gateway.dto.ChargeRequestDTO;
 import com.moonevue.gateway.dto.ChargeResponseDTO;
+import com.moonevue.gateway.dto.CreateCheckoutTransactionRequest;
 import com.moonevue.gateway.dto.TransactionSummaryDTO;
 import com.moonevue.gateway.service.PaymentService;
 import com.moonevue.core.enums.BankType;
@@ -33,8 +34,8 @@ public class PaymentController {
     @GetMapping
     public ResponseEntity<?> listTransactions(
             Authentication authentication,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "50") int size) {
         Long tenantId = extractTenantId(authentication);
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
@@ -47,6 +48,21 @@ public class PaymentController {
     public ResponseEntity<?> createPayment(@Valid @RequestBody ChargeRequestDTO request) {
         return processCharge(request);
         }
+
+    @PostMapping("/checkout")
+    public ResponseEntity<?> createCheckout(Authentication authentication,
+                                            @Valid @RequestBody CreateCheckoutTransactionRequest request) {
+        Long tenantId = extractTenantId(authentication);
+        if (tenantId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
+        }
+        try {
+            TransactionSummaryDTO response = paymentService.createCheckoutDraft(tenantId, request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 
         @PostMapping("/pix/immediate")
         public ResponseEntity<?> createPixImmediate(@Valid @RequestBody PixImmediateRequest request) {

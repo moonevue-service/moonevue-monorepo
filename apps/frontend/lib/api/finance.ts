@@ -1,7 +1,11 @@
 import { ApiClient } from './client';
 
 export enum BankType {
-  EFI = 'EFI'
+  BRADESCO = 'BRADESCO',
+  ITAU = 'ITAU',
+  SANTANDER = 'SANTANDER',
+  CEF = 'CEF',
+  BB = 'BB',
 }
 
 export enum AccountType {
@@ -51,25 +55,12 @@ export interface BankConfigurationResponse {
 }
 
 export interface CertificateUploadResponse {
-  configurationId: number;
-  maskedPath: string;
-  originalFilename: string;
-  earliestExpiry?: string;
-}
-
-export interface BankConfigurationUpdateRequest {
-  isActive?: boolean;
-  webhookUrl?: string;
-  extraConfig?: Record<string, any>;
+  certificatePath: string;
+  expiresAt?: string;
 }
 
 export const FinanceApi = {
   // Bank Accounts
-  listBankAccounts: (tenantId: number) =>
-    ApiClient.get<BankAccountResponse[]>(
-      `/api/tenant/${tenantId}/bank-account`
-    ),
-
   createBankAccount: (tenantId: number, data: BankAccountRequest) =>
     ApiClient.post<BankAccountResponse>(
       `/api/tenant/${tenantId}/bank-account`,
@@ -92,11 +83,6 @@ export const FinanceApi = {
     ),
 
   // Bank Configurations
-  listBankConfigurations: (tenantId: number, bankAccountId: number) =>
-    ApiClient.get<BankConfigurationResponse[]>(
-      `/api/tenant/${tenantId}/bank-account/${bankAccountId}/configuration`
-    ),
-
   createBankConfiguration: (
     tenantId: number,
     bankAccountId: number,
@@ -141,12 +127,7 @@ export const FinanceApi = {
     });
 
     if (!response.ok) {
-      let msg = 'Falha ao enviar certificado';
-      try {
-        const body = await response.json();
-        if (body?.error) msg = body.error;
-      } catch {}
-      throw new Error(msg);
+      throw new Error('Failed to upload certificate');
     }
 
     return response.json() as Promise<CertificateUploadResponse>;

@@ -43,7 +43,8 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests(authz -> authz
                 .requestMatchers("/actuator/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/webhooks/**").hasAuthority("WEBHOOK")
+                    .requestMatchers("/checkout/**").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/webhooks/**").hasAuthority("WEBHOOK")
                 .anyRequest().authenticated()
         );
 

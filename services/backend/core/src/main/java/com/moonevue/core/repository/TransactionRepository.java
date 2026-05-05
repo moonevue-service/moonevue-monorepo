@@ -12,12 +12,20 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+
+       Optional<Transaction> findByCheckoutToken(UUID checkoutToken);
+
+       Optional<Transaction> findFirstByExternalReferenceOrderByIdDesc(String externalReference);
+
+       Page<Transaction> findByTenantIdAndClientIdOrderByCreatedAtDesc(Long tenantId, Long clientId, Pageable pageable);
 
     @Query("""
            select t from Transaction t
            join fetch t.bankAccount ba
+           left join fetch t.client c
            where t.tenant.id = :tenantId
            order by t.createdAt desc
            """)
