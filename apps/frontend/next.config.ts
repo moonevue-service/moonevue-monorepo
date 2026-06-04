@@ -23,6 +23,14 @@ const nextConfig: NextConfig = {
         source: "/webhooks/:path*",
         destination: `${backendBaseUrl}/webhooks/:path*`,
       },
+      {
+        source: "/clients/:path*",
+        destination: `${backendBaseUrl}/clients/:path*`,
+      },
+      {
+        source: "/checkout/:path*",
+        destination: `${backendBaseUrl}/checkout/:path*`,
+      },
     ];
   },
 };

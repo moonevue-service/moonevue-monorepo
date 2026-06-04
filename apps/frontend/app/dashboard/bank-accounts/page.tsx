@@ -19,6 +19,7 @@ import {
 import { DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuth } from '@/app/providers';
+import { canManageBankConfigurations } from '@/lib/authz';
 import { AccountType, BankAccountResponse, BankType, FinanceApi } from '@/lib/api';
 
 const { Title, Text } = Typography;
@@ -36,6 +37,7 @@ export default function BankAccountsPage() {
   const { user } = useAuth();
   const { message } = App.useApp();
   const router = useRouter();
+  const canManageConfig = canManageBankConfigurations(user?.roles);
   const [form] = Form.useForm<FormValues>();
   const [accounts, setAccounts] = useState<BankAccountResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -151,11 +153,12 @@ export default function BankAccountsPage() {
       width: 130,
       render: (_, record) => (
         <Space>
-          <Tooltip title="Configurações EFI">
+          <Tooltip title={canManageConfig ? 'Configurações EFI' : 'Somente administradores'}>
             <Button
               type="text"
               size="small"
               icon={<SettingOutlined />}
+              disabled={!canManageConfig}
               onClick={() => router.push(`/dashboard/bank-accounts/${record.id}/config`)}
             />
           </Tooltip>

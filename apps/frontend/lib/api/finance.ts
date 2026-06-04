@@ -48,6 +48,7 @@ export interface BankConfigurationResponse {
   webhookUrl: string;
   isActive: boolean;
   extraConfig: Record<string, any>;
+  certificatePathMasked?: string;
 }
 
 export interface CertificateUploadResponse {

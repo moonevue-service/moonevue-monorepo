@@ -35,6 +35,7 @@ import {
 import type { UploadFile } from 'antd';
 import Link from 'next/link';
 import { useAuth } from '@/app/providers';
+import { canManageBankConfigurations } from '@/lib/authz';
 import {
   BankAccountResponse,
   BankConfigurationRequest,
@@ -276,14 +277,14 @@ function ConfigModal({
           tenantId,
           bankAccountId,
           editing.id,
-          { webhookUrl: values.webhookUrl, isActive: values.isActive, extraConfig }
+          { webhookUrl: values.webhookUrl ?? "", isActive: values.isActive, extraConfig }
         );
         message.success('Configuração atualizada');
         onSuccess(res);
       } else {
         const req: BankConfigurationRequest = {
           environment: values.environment,
-          webhookUrl: values.webhookUrl,
+          webhookUrl: values.webhookUrl ?? "",
           isActive: values.isActive,
           extraConfig,
         };
@@ -340,7 +341,7 @@ function ConfigModal({
           <Input placeholder="https://meu-site.com/webhooks/pix" />
         </Form.Item>
 
-        <Divider orientation="left" style={{ fontSize: 13 }}>
+        <Divider  style={{ fontSize: 13 }}>
           PIX — Credenciais
         </Divider>
 
@@ -378,7 +379,7 @@ function ConfigModal({
           </Col>
         </Row>
 
-        <Divider orientation="left" style={{ fontSize: 13 }}>
+        <Divider  style={{ fontSize: 13 }}>
           Boleto (Cobranças) — Credenciais
         </Divider>
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
@@ -410,6 +411,7 @@ export default function BankConfigPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { message } = App.useApp();
+  const canManageConfig = canManageBankConfigurations(user?.roles);
 
   const [account, setAccount] = useState<BankAccountResponse | null>(null);
   const [configs, setConfigs] = useState<BankConfigurationResponse[]>([]);
@@ -422,10 +424,13 @@ export default function BankConfigPage() {
   const [certTargetConfig, setCertTargetConfig] = useState<BankConfigurationResponse | null>(null);
 
   useEffect(() => {
-    if (!user?.tenantId || !bankAccountId) return;
+    if (!user?.tenantId || !bankAccountId || !canManageConfig) {
+      setLoading(false);
+      return;
+    }
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.tenantId, bankAccountId]);
+  }, [user?.tenantId, bankAccountId, canManageConfig]);
 
   const loadData = async () => {
     if (!user?.tenantId) return;
@@ -488,6 +493,25 @@ export default function BankConfigPage() {
       <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 64 }}>
         <Spin size="large" />
       </div>
+    );
+  }
+
+  if (!canManageConfig) {
+    return (
+      <Card>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Title level={3} style={{ marginBottom: 0 }}>
+            Acesso negado
+          </Title>
+          <Text type="secondary">
+            Apenas usuários com os papéis ADMIN_TENANT ou ADMIN podem administrar configurações de
+            banco.
+          </Text>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/dashboard/bank-accounts')}>
+            Voltar para contas bancárias
+          </Button>
+        </Space>
+      </Card>
     );
   }
 
@@ -614,7 +638,7 @@ export default function BankConfigPage() {
         open={configModalOpen}
         editing={editingConfig}
         existingEnvironments={existingEnvironments}
-        tenantId={user?.tenantId ?? 0}
+        tenantId={user?.tenantId || 0}
         bankAccountId={bankAccountId}
         onClose={() => setConfigModalOpen(false)}
         onSuccess={handleConfigSuccess}
@@ -623,7 +647,7 @@ export default function BankConfigPage() {
       <CertUploadModal
         open={certModalOpen}
         config={certTargetConfig}
-        tenantId={user?.tenantId ?? 0}
+        tenantId={user?.tenantId || 0}
         bankAccountId={bankAccountId}
         onClose={() => setCertModalOpen(false)}
         onSuccess={handleCertSuccess}

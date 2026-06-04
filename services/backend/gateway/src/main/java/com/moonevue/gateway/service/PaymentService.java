@@ -73,20 +73,20 @@ public class PaymentService {
                         t.getType(),
                         t.getDescription(),
                         t.getExternalReference(),
-                t.getCheckoutToken(),
-                t.getCheckoutToken() != null ? frontendUrl + "/checkout/" + t.getCheckoutToken() : null,
-                t.getCheckoutExpiresAt(),
-                t.getCheckoutInstrument(),
-                t.getClient() != null ? t.getClient().getId() : null,
-                t.getClient() != null ? t.getClient().getName() : null,
-                t.getCheckoutAccessMode() != null ? t.getCheckoutAccessMode().name() : null,
+                        t.getCheckoutToken(),
+                        t.getCheckoutToken() != null ? frontendUrl + "/checkout/" + t.getCheckoutToken() : null,
+                        t.getCheckoutExpiresAt(),
+                        t.getCheckoutInstrument(),
+                        t.getClient() != null ? t.getClient().getId() : null,
+                        t.getClient() != null ? t.getClient().getName() : null,
+                        t.getCheckoutAccessMode() != null ? t.getCheckoutAccessMode().name() : null,
                         t.getBankAccount().getBank() != null ? t.getBankAccount().getBank().name() : null,
                         t.getCreatedAt()
                 ));
     }
 
-        @Transactional
-        public TransactionSummaryDTO createCheckoutDraft(Long tenantId, CreateCheckoutTransactionRequest request) {
+    @Transactional
+    public TransactionSummaryDTO createCheckoutDraft(Long tenantId, CreateCheckoutTransactionRequest request) {
         BankConfiguration config = bankConfigurationRepository.findById(request.bankConfigurationId())
             .orElseThrow(() -> new IllegalArgumentException("BankConfiguration não encontrada: " + request.bankConfigurationId()));
 
@@ -119,7 +119,7 @@ public class PaymentService {
             Client client = clientRepository.findById(request.clientId())
                 .orElseThrow(() -> new IllegalArgumentException("Cliente não encontrado: " + request.clientId()));
             if (!client.getTenant().getId().equals(tenantId)) {
-            throw new IllegalArgumentException("Cliente não pertence ao tenant");
+                throw new IllegalArgumentException("Cliente não pertence ao tenant");
             }
             tx.setClient(client);
         }
@@ -143,18 +143,6 @@ public class PaymentService {
             tx.getBankAccount().getBank() != null ? tx.getBankAccount().getBank().name() : null,
             tx.getCreatedAt()
         );
-        }
-
-    @Transactional
-    public String create(ChargeRequestDTO request) {
-        ChargeResponseDTO response = createCharge(request);
-        return serialize(response);
-    }
-
-    @Transactional
-    public ChargeResponseDTO createCharge(ChargeRequestDTO request) {
-        ChargeResponseDTO response = createCharge(request);
-        return serialize(response);
     }
 
     @Transactional
@@ -166,14 +154,9 @@ public class PaymentService {
         log.info("[PaymentService] createCharge bank={} configId={} instrument={}",
                 request.bank(), request.bankConfigurationId(), request.payment().instrument());
 
-        log.info("[PaymentService] createCharge bank={} configId={} instrument={}",
-                request.bank(), request.bankConfigurationId(), request.payment().instrument());
-
-        // 1) Prepara dados para persistência
         BigDecimal amount = extractAmount(request);
         String payloadJson = serialize(request);
 
-        // 2) Chama o provedor
         String responseJson;
         try {
             responseJson = integration.processPayment(payloadJson, config);
@@ -183,45 +166,28 @@ public class PaymentService {
             throw e;
         }
 
-        // 3) Converte resposta padronizada da integração
-        ChargeResponseDTO resp = parseChargeResponse(responseJson);
-        String responseJson;
-        try {
-            responseJson = integration.processPayment(payloadJson, config);
-        } catch (Exception e) {
-            log.error("[PaymentService] Falha na integração bank={} configId={} instrument={}: {}",
-                    request.bank(), request.bankConfigurationId(), request.payment().instrument(), e.getMessage(), e);
-            throw e;
-        }
-
-        // 3) Converte resposta padronizada da integração
         ChargeResponseDTO resp = parseChargeResponse(responseJson);
 
-        // 4) Persiste Transaction
         Transaction tx = new Transaction();
         tx.setTenant(config.getTenant());
         tx.setBankAccount(config.getBankAccount());
         tx.setAmount(amount);
         tx.setType(TransactionType.CHARGE);
-        tx.setStatus(TransactionStatus.PENDING); // ficará 'PENDING' até confirmação via webhook/consulta
+        tx.setStatus(TransactionStatus.PENDING);
         tx.setDescription("Cobrança " + request.payment().instrument().name());
 
-        // externalReference = id padronizado (txid no PIX / charge_id no boleto)
-        if (resp.getId() != null) {
-        // externalReference = id padronizado (txid no PIX / charge_id no boleto)
         if (resp.getId() != null) {
             tx.setExternalReference(resp.getId());
         }
 
         tx = transactionRepository.save(tx);
 
-        // 5) Persiste TransactionLog (evento de criação no provedor)
-        TransactionLog log = new TransactionLog();
-        log.setTenant(config.getTenant());
-        log.setTransaction(tx);
-        log.setEventType("CREATED");
-        log.setMessage("Transação criada no provedor " + request.bank().name());
-        log.setSeverity(Severity.INFO);
+        TransactionLog txLog = new TransactionLog();
+        txLog.setTenant(config.getTenant());
+        txLog.setTransaction(tx);
+        txLog.setEventType("CREATED");
+        txLog.setMessage("Transação criada no provedor " + request.bank().name());
+        txLog.setSeverity(Severity.INFO);
 
         Map<String, Object> md = new HashMap<>();
         md.put("provider", request.bank().name());
@@ -231,18 +197,10 @@ public class PaymentService {
         md.put("amount", resp.getAmount());
         md.put("locId", resp.getLocId());
         md.put("location", resp.getLocation());
-        md.put("providerId", resp.getId());
-        md.put("status", resp.getStatus());
-        md.put("amount", resp.getAmount());
-        md.put("locId", resp.getLocId());
-        md.put("location", resp.getLocation());
-        log.setMetadata(md);
+        txLog.setMetadata(md);
 
-        transactionLogRepository.save(log);
+        transactionLogRepository.save(txLog);
 
-        // 6) Retorna a resposta padronizada pela integração
-        return resp;
-        // 6) Retorna a resposta padronizada pela integração
         return resp;
     }
 
@@ -261,20 +219,11 @@ public class PaymentService {
             case PIX_DUE:
                 return request.payment().pixDue().amountOriginal();
             case BOLETO:
-                // Somatório dos itens em centavos -> converte para BigDecimal com 2 casas
                 return request.payment().boleto().items().stream()
                         .map(i -> new BigDecimal(i.valueInCents()).movePointLeft(2).multiply(new BigDecimal(i.amount())))
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
             default:
                 throw new IllegalArgumentException("Instrumento não suportado para cálculo de amount.");
-        }
-    }
-
-    private ChargeResponseDTO parseChargeResponse(String responseJson) {
-        try {
-            return objectMapper.readValue(responseJson, ChargeResponseDTO.class);
-        } catch (Exception e) {
-            throw new IllegalStateException("Resposta do provedor em formato inválido.", e);
         }
     }
 

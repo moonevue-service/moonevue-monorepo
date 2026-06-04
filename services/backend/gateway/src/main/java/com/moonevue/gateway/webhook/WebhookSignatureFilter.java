@@ -65,14 +65,6 @@ public class WebhookSignatureFilter extends OncePerRequestFilter {
                 normalizedSig = normalizedSig.substring(7);
             }
 
-            // Fallback opcional: permite token compartilhado igual ao segredo em ambientes legados.
-            if (hmacSecret.equals(normalizedSig)) {
-                log.info("Webhook autenticado por token compartilhado uri={}", req.getRequestURI());
-                setWebhookAuthentication();
-                chain.doFilter(wrapped, res);
-                return;
-            }
-
             if (!expected.equalsIgnoreCase(normalizedSig)) {
                 log.warn("Webhook assinatura inválida uri={}", req.getRequestURI());
                 res.sendError(401); return;

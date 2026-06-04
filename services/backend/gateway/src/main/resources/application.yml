@@ -3,8 +3,8 @@ server:
   forward-headers-strategy: framework
 
 auth:
-  base-url: ${AUTH_BASE_URL:http://auth:8081}
-  internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
+  base-url: ${AUTH_BASE_URL}
+  internal-token: ${AUTH_INTERNAL_TOKEN}
   cookie-name: ${AUTH_COOKIE_NAME:sid}
 
 management:
@@ -17,9 +17,9 @@ spring:
   application:
     name: gateway
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
-    username: ${SPRING_DATASOURCE_USERNAME:moonevue}
-    password: ${SPRING_DATASOURCE_PASSWORD:moone_data_vue}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
@@ -31,7 +31,7 @@ moonevue:
   gateway:
     webhooks:
       hmac:
-        secret: ${WEBHOOK_HMAC_SECRET:change-me}
+        secret: ${WEBHOOK_HMAC_SECRET}
         header: X-Signature
       timestamp:
         header: X-Signature-Timestamp
@@ -51,10 +51,9 @@ spring:
     activate:
       on-profile: docker
   datasource:
-    # Compatível com SPRING_DATASOURCE_* (recomendado) e com DB_* (legado)
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://postgres:5432/moonevue}}
-    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:moonevue}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASS:moone_data_vue}}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2

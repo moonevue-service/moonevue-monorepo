@@ -1,13 +1,13 @@
 storage:
-  certs-dir: ${STORAGE_CERTS_DIR:/data/certs}
+  certs-dir: ${STORAGE_CERTS_DIR}
 
 server:
   port: 8082
   forward-headers-strategy: framework
 
 auth:
-  base-url: ${AUTH_BASE_URL:http://auth:8081}
-  internal-token: ${AUTH_INTERNAL_TOKEN:change-me}
+  base-url: ${AUTH_BASE_URL}
+  internal-token: ${AUTH_INTERNAL_TOKEN}
   cookie-name: ${AUTH_COOKIE_NAME:sid}
 
 management:
@@ -20,9 +20,9 @@ spring:
   application:
     name: finance
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/moonevue}
-    username: ${SPRING_DATASOURCE_USERNAME:moonevue}
-    password: ${SPRING_DATASOURCE_PASSWORD:moone_data_vue}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
@@ -40,9 +40,9 @@ spring:
     activate:
       on-profile: docker
   datasource:
-    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://postgres:5432/moonevue}}
-    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:moonevue}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASS:moone_data_vue}}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2

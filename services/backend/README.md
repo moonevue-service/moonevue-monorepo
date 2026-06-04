@@ -1,107 +1,203 @@
-# Uma arquitetura modular para gerenciamento financeiro: gateway, autenticação e microserviço de finance
+# Backend
 
-Autor: Marcelo CP Junior  
-Disciplina: TCC I  
-Data: 2025-10-27
+Monorepo Maven do backend do Moonevue. O projeto é dividido em serviços Spring Boot independentes e módulos compartilhados para manter o domínio, a autenticação e o gateway desacoplados.
 
-## Resumo
-Este trabalho apresenta o desenvolvimento de uma aplicação modular para gerenciamento financeiro composta por três serviços independentes: gateway, auth e finance. O objetivo é demonstrar práticas de engenharia de software modernas — separação de responsabilidades, autenticação por sessão, documentação OpenAPI, versionamento de banco com migrações (Flyway), segurança em webhooks (HMAC) e deploy reprodutível por containers (Docker). A solução foi projetada para ser reprodutível em ambiente de desenvolvimento e facilmente implantada em ambiente de teste/produção.
+## Módulos
 
-Palavras-chave: microserviços, autenticação, Docker, OpenAPI, Flyway, webhooks
+- `auth`: registro, login, logout, introspecção e renovação de sessão.
+- `gateway`: API pública, clientes, pagamentos, checkout e webhooks.
+- `finance`: contas bancárias, configurações bancárias e upload de certificados.
+- `core`: entidades, enums, repositórios e filtros compartilhados.
+- `useful`: utilidades internas.
 
----
+## Como rodar só o backend
 
-## 1. Introdução
-Sistemas distribuídos e orientados a serviços têm se tornado padrão para aplicações web modernas, pois permitem escalabilidade, deploy independente e isolamento de responsabilidades. Para o TCC I, este projeto implementa uma plataforma mínima porém completa para demonstrar esses conceitos aplicados ao domínio financeiro: autenticação sólida, roteamento e segurança de borda (gateway) e um microserviço de domínio (finance) responsável por regras de negócio.
+### Pré-requisitos
 
-## 2. Objetivos
-Objetivo geral:
-- Construir e validar uma arquitetura modular e segura para um sistema financeiro de demonstração.
+- Java 21
+- Maven Wrapper
+- PostgreSQL 16 ou o banco disponível via Docker Compose
+- Docker, se você quiser subir a stack completa
 
-Objetivos específicos:
-- Implementar fluxo de autenticação por sessão, com tratamento correto de renovação e revogação.
-- Documentar a API com OpenAPI/Swagger facilitando integração com frontend.
-- Controlar schema do banco com migrações (Flyway).
-- Implementar recebimento de webhooks com validação HMAC e proteção contra replay.
-- Empacotar serviços em containers e prover arquivos de orquestração (docker-compose) para replicação do ambiente.
+### Stack completa de backend
 
-## 3. Arquitetura do sistema
-A arquitetura proposta é composta por três serviços Spring Boot independentes:
+Na raiz `services/backend`:
 
-- auth: responsável por autenticação, criação e validação de sessões, emissão de cookies seguros e endpoints relacionados ao usuário.
-- gateway: ponto de entrada público, valida sessão (introspecção via auth), aplica políticas de segurança, expõe APIs públicas e termina webhooks.
-- finance: microserviço de domínio que contém endpoints específicos do negócio (ex.: contas bancárias vinculadas a contratantes).
+```bash
+cp .env.example .env
+docker compose up --build
+```
 
-Os serviços comunicam-se por HTTP em uma rede privada (quando orquestrados via Docker Compose) e compartilham um token interno (AUTH_INTERNAL_TOKEN) para chamadas de confiança entre serviços. O banco de dados utilizado é PostgreSQL.
+### Backend isolado com o compose local do próprio serviço
 
-Arquitetura lógica:
-- Frontend <-> Gateway (público) -> Auth / Finance (internos)
-- Gateway valida sessão via cookie e, quando necessário, consulta o auth.
-- Webhooks do provedor bancário chegam ao gateway, que valida assinatura HMAC e reencaminha ou persiste para processamento.
+```bash
+cd services/backend
+cp .env.example .env
+docker compose up --build
+```
 
-## 4. Implementação
+### Produção / reprodução
 
-### 4.1 Autenticação e sessões
-- Sessões persistidas na tabela `auth_session` contendo: id (UUID), user_id, created_at, last_seen_at, expires_at, ip_address, user_agent, revoked.
-- Fluxo idempotente de login:
-  - Se existe uma sessão ativa para o usuário, ela é reutilizada/renovada; se o cookie recebido pertence a outro usuário, a sessão antiga é revogada.
-- Repositório fornece query para recuperar a sessão ativa mais recente:
-  - `findFirstByUserAndRevokedFalseAndExpiresAtAfterOrderByLastSeenAtDesc(User, now)`.
-- Recomenda-se criar índice parcial único para garantir no banco ao máximo uma sessão não revogada por usuário.
+```bash
+cd services/backend
+cp .env.example .env.prod
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
 
-### 4.2 Endpoints e documentação
-- As APIs são documentadas com OpenAPI/Swagger, garantindo visibilidade clara dos parâmetros de rota, query e schemas de request/response.
-- Exemplo de endpoint de domínio:
-  - `POST /api/contractors/{contractorId}/bank-accounts` — cria uma conta bancária associada a um contratante; `contractorId` é declarado como `@PathVariable("contractorId")` para que o Swagger apresente corretamente o campo no UI.
-- Endpoints internos (webhooks, admin) são ocultados no Swagger com anotações apropriadas.
+### Build e testes
 
-### 4.3 Migrações e persistência
-- Flyway gerencia as migrations; em produção o `spring.jpa.hibernate.ddl-auto` está definido como `none`.
-- Migrations versionadas aplicam criação de tabelas e índices (incluindo scripts de saneamento quando necessário).
+```bash
+cd services/backend
+./mvnw -B test
+./mvnw -B -DskipTests package
+```
 
-### 4.4 Webhooks
-- Webhooks terminam preferencialmente no gateway (`/webhooks/**`).
-- Validação de assinatura HMAC (header `X-Signature`) com timestamp (`X-Signature-Timestamp`) para proteção contra requisições forjadas e replay (janela permitida configurável).
-- Filtro de autenticação converte requisições válidas em uma autenticação interna com autoridade `WEBHOOK`.
-- Processamento resiliente: recomenda-se persistir corpo/headers e usar idempotency-key para evitar processamento duplicado; o gateway pode repassar o evento ao serviço finance de forma síncrona ou via fila.
+## Portas e serviços
 
-### 4.5 Containerização e deployment
-- Cada serviço possui Dockerfile de produção (multi-stage Maven build + runtime Eclipse Temurin JRE) e Dockerfile de desenvolvimento (mvn spring-boot:run com DevTools).
-- docker-compose.prod.yml orquestra os serviços e o banco; em produção recomenda-se usar Postgres gerenciado (Neon, RDS, Cloud SQL).
-- Gateway é o único serviço público por padrão; auth e finance ficam na rede interna.
-- Variáveis sensíveis (tokens, segredos HMAC, secrets do finance) devem ser definidas via environment/secret manager.
+- Auth: `8081`
+- Gateway: `8080`
+- Finance: `8082`
+- PostgreSQL: `5432`
 
-## 5. Segurança
-- Cookies de sessão: em produção usar `Secure=true` e `SameSite` adequado — `None` + HTTPS para cross-site; `Lax` para same-site.
-- Webhooks: HMAC + timestamp para validar autenticidade e prevenir replay attacks.
-- Comunicação interna: AUTH_INTERNAL_TOKEN para chamadas confiáveis entre serviços.
-- Princípio do menor privilégio: serviços expostos minimamente e endpoints administrativos ocultos/em perfil protegido.
+### Debug
 
-## 6. Testes e observabilidade
-- Actuator expõe `/actuator/health` e `/actuator/info` para healthchecks e monitoramento.
-- Healthchecks integrados ao docker-compose permitem reinício automático de containers com falha.
-- Logs padronizados no stdout/stderr para agregadores de logs em produção.
-- Recomenda-se integração futura com Prometheus/Grafana para métricas e com central de logs (ELK/Cloud provider).
+- Auth JDWP: `5007 -> 5005`
+- Gateway JDWP: `5005 -> 5005`
+- Finance JDWP: `5006 -> 5005`
 
-## 7. Resultados atuais
-- Implementação funcional dos três serviços com endpoints principais, autenticação por sessão e documentação OpenAPI.
-- Fluxo de login testado contra cenários de sessão duplicada (corrigido via query que retorna a sessão ativa mais recente).
-- Webhooks terminam no gateway com validação básica; idempotência e persistência de eventos preparada para extensão.
-- Dockerfiles e compose prontos para subir ambientes de desenvolvimento e teste; arquivos de produção organizados (docker-compose.prod.yml e .env.prod.example).
+## Contratos por serviço
 
-## 8. Limitações e trabalhos futuros
-- Escalabilidade horizontal e orquestração: migrar para Kubernetes para alta disponibilidade e autoscaling.
-- Persistência de arquivos: migrar para object storage (S3/GCS) em vez de volume local.
-- CI/CD: automatizar build/publish das imagens (GitHub Actions para GHCR/Docker Hub).
-- Observabilidade avançada e alertas: integrar métricas e tracing distribuído (OpenTelemetry).
-- Segurança: rate-limiting, WAF e hardening adicional de endpoints administrativos.
+### Auth
 
-## 9. Conclusão
-O projeto entrega uma base técnica sólida, demonstrando domínio sobre desenho de serviços, autenticação segura, documentação e infra reproducível via containers. Mantendo os serviços desacoplados, a solução facilita evoluções (escala, novas features, hardening), ao mesmo tempo em que fornece um artefato prático para integração com front-end e demonstrações.
+Base: `/auth`
 
-## Referências
-- Spring Boot Reference Documentation
-- Flyway Documentation
-- Docker Documentation
-- OWASP Secure Coding Practices
-- OpenAPI / Swagger
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/logout`
+- `GET /auth/introspect`
+- `POST /auth/touch`
+- `POST /auth/employees`
+
+### Gateway
+
+Base pública sem prefixo adicional
+
+- `GET /clients`
+- `GET /clients/{clientId}`
+- `POST /clients`
+- `PUT /clients/{clientId}`
+- `GET /clients/{clientId}/transactions`
+- `GET /payments`
+- `POST /payments`
+- `POST /payments/checkout`
+- `POST /payments/pix/immediate`
+- `POST /payments/pix/due`
+- `POST /payments/boleto`
+- `GET /checkout/{token}`
+- `GET /checkout/{token}/status`
+- `GET /checkout/{token}/client-lookup`
+- `POST /checkout/{token}/identify`
+- `POST /checkout/{token}/pay`
+- `POST /webhooks/banks/{provider}/events`
+
+### Finance
+
+Base: `/api/tenant/{tenantId}`
+
+- `GET /api/tenant/{tenantId}/bank-account`
+- `POST /api/tenant/{tenantId}/bank-account`
+- `PUT /api/tenant/{tenantId}/bank-account/{bankAccountId}`
+- `DELETE /api/tenant/{tenantId}/bank-account/{bankAccountId}`
+- `GET /api/tenant/{tenantId}/bank-account/{bankAccountId}/configuration`
+- `POST /api/tenant/{tenantId}/bank-account/{bankAccountId}/configuration`
+- `PUT /api/tenant/{tenantId}/bank-account/{bankAccountId}/configuration/{configId}`
+- `POST /api/tenant/{tenantId}/bank-account/{bankAccountId}/configuration/{configId}/certificate`
+
+## Dependências internas e externas
+
+### Internas
+
+- `core` concentra entidades, enums e o filtro `SessionValidationFilter`.
+- `auth` é a autoridade de sessão para gateway e finance.
+- `gateway` consulta auth para introspecção de sessão.
+- `finance` compartilha o mesmo esquema de banco e o mesmo padrão de autenticação por cookie.
+
+### Externas
+
+- Spring Boot 3.5.
+- Spring Security.
+- Spring Data JPA.
+- Flyway.
+- PostgreSQL.
+- Springdoc OpenAPI.
+- Logstash encoder para logs estruturados.
+
+## Fluxo de autenticação
+
+1. O frontend envia o cookie `sid` com `credentials: include`.
+2. O gateway ou finance chamam `auth/introspect` com o token interno `X-Internal-Token`.
+3. O auth devolve `userId`, `email`, `tenantId` e `roles`.
+4. O filtro compartilhado monta a autenticação no Spring Security.
+5. Em seguida o serviço executa a autorização por tenant e/ou por papel, conforme o controller.
+
+## Fluxo de webhook
+
+1. O request chega em `POST /webhooks/banks/{provider}/events`.
+2. O filtro `WebhookSignatureFilter` lê o corpo, calcula o HMAC e compara com o header configurado.
+3. Se a assinatura for válida, o request recebe a autoridade `WEBHOOK`.
+4. O controller processa o evento.
+
+## Gotchas
+
+- O gateway tem migrations em `src/main/resources/db/migration`, mas o perfil padrão de Docker desabilita Flyway. Confirme o comportamento ao ativar schema novo.
+- O finance tem autorização por tenant em parte dos controllers; mantenha essa checagem consistente entre endpoints.
+- O auth usa cookie HTTP-only com `SameSite` e `Secure` parametrizados por ambiente.
+- O backend depende fortemente de `AUTH_INTERNAL_TOKEN`; se ele divergir entre serviços, tudo falha com 401.
+- O diretório de certificados precisa existir e ter permissão correta quando houver upload de certificados bancários.
+
+## Variáveis de ambiente obrigatórias
+
+O boot falha explicitamente com mensagem de erro se estas variáveis estiverem ausentes (fora do profile `test`):
+
+| Serviço | Variáveis obrigatórias |
+| --- | --- |
+| auth | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `AUTH_INTERNAL_TOKEN` |
+| gateway | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `AUTH_BASE_URL`, `AUTH_INTERNAL_TOKEN`, `WEBHOOK_HMAC_SECRET`, `STORAGE_CERTS_DIR` |
+| finance | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `AUTH_BASE_URL`, `AUTH_INTERNAL_TOKEN`, `STORAGE_CERTS_DIR` |
+
+Copie `services/backend/.env.example` como ponto de partida e preencha todas as variáveis antes de subir os containers.
+
+## Autorização de configuração bancária
+
+O controller `BankConfigurationController` no módulo `finance` é protegido com:
+
+```java
+@PreAuthorize("hasAnyAuthority('ADMIN_TENANT', 'ADMIN')")
+```
+
+Regra: apenas usuários com papel `ADMIN_TENANT` ou `ADMIN` podem listar, criar, atualizar, e fazer upload de certificados em configurações bancárias.
+
+Outros papéis (`USER`, `FINANCE`, `SUPPORT`, `EMPLOYED`) recebem 403.
+
+O `GlobalExceptionHandler` do finance mapeia `AccessDeniedException` para 403 de forma consistente.
+
+## Como testar
+
+- Auth: `./mvnw -B -pl auth test`
+- Gateway: `./mvnw -B -pl gateway test`
+- Finance: `./mvnw -B -pl finance test`
+- Reactor completo: `./mvnw -B test`
+
+## Como debugar
+
+- Veja logs com `docker compose logs -f auth`, `docker compose logs -f gateway` e `docker compose logs -f finance`.
+- Healthchecks: `/actuator/health` em cada serviço.
+- Para depurar localmente, conecte ao JDWP nas portas expostas pelo compose.
+- Se a sessão falhar, valide primeiro auth; se um endpoint de negócio falhar, valide o tenant no token introspectado.
+
+## Owners sugeridos
+
+- Auth: time de identidade e segurança.
+- Gateway: time de integrações e APIs públicas.
+- Finance: time de domínio financeiro.
+- Core/shared: time plataforma/backend.

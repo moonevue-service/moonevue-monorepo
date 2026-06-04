@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,9 @@ import java.util.*;
 @RequestMapping("/auth/employees")
 @RequiredArgsConstructor
 public class EmployeeController {
+
+    @Value("${moonevue.auth.cookie.name}")
+    private String cookieName;
 
     private final SessionService sessions;
     private final UserRepository users;
@@ -54,7 +58,7 @@ public class EmployeeController {
     }
 
     private User getCurrentUser(HttpServletRequest req) {
-        var c = WebUtils.getCookie(req, "sid"); // ou injete o nome do cookie via @Value, similar ao AuthController
+        var c = WebUtils.getCookie(req, cookieName);
         if (c == null) return null;
         Optional<UUID> sid;
         try { sid = Optional.of(UUID.fromString(c.getValue())); } catch (Exception e) { return null; }
