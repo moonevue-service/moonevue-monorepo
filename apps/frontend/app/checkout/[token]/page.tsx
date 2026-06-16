@@ -21,6 +21,13 @@ export default function CheckoutPage({ params }: Props) {
   const [waitingConfirmation, setWaitingConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form] = Form.useForm<CheckoutPayRequest>();
+  const watchedInstrument = Form.useWatch('instrument', form);
+
+  const isCreditCardInstrument = (instrument?: string) => {
+    if (!instrument) return false;
+    const normalized = instrument.toUpperCase();
+    return normalized.includes('CARD') || normalized.includes('CREDIT');
+  };
 
   useEffect(() => {
     (async () => {
@@ -42,6 +49,11 @@ export default function CheckoutPage({ params }: Props) {
     [info]
   );
 
+  const currentInstrument = useMemo(
+    () => info?.allowedInstruments?.[0] || watchedInstrument || defaultInstrument,
+    [defaultInstrument, info?.allowedInstruments, watchedInstrument]
+  );
+
   useEffect(() => {
     if (!info) return;
 
@@ -56,6 +68,11 @@ export default function CheckoutPage({ params }: Props) {
     }
 
     if (info.status === 'CHECKOUT_OPEN') {
+      setStep((prev) => (prev > 1 ? 1 : prev));
+      return;
+    }
+
+    if (info.status === 'FAILED') {
       setStep((prev) => (prev > 1 ? 1 : prev));
     }
   }, [info]);
@@ -116,14 +133,19 @@ export default function CheckoutPage({ params }: Props) {
 
       if (result.status === 'PROCESSING' || result.status === 'PENDING') {
         setStep(2);
-        setWaitingConfirmation(true);
+        setWaitingConfirmation(isCreditCardInstrument(values.instrument));
         message.info('Pagamento iniciado. Aguardando confirmação...');
       } else {
         if (result.status === 'PAID') {
           setStep(3);
+          message.success('Pagamento processado com sucesso');
+        } else if (result.status === 'FAILED') {
+          setStep(1);
+          message.error('Não foi possível processar o pagamento. Revise os dados e tente novamente.');
+        } else if (result.status === 'EXPIRED' || result.status === 'CANCELED') {
+          message.warning('Este checkout não está mais disponível para pagamento.');
         }
         setWaitingConfirmation(false);
-        message.success('Pagamento processado com sucesso');
       }
     } catch (e: any) {
       setError(e?.message || 'Falha ao processar pagamento');
@@ -139,7 +161,7 @@ export default function CheckoutPage({ params }: Props) {
       return;
     }
 
-    setWaitingConfirmation(true);
+    setWaitingConfirmation(isCreditCardInstrument(currentInstrument));
 
     const intervalId = window.setInterval(async () => {
       try {
@@ -163,7 +185,7 @@ export default function CheckoutPage({ params }: Props) {
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [token, info?.status]);
+  }, [token, info?.status, currentInstrument]);
 
   const pixCopiaECola = info?.paymentResult?.pixCopiaECola;
   const pixQrUrl = pixCopiaECola
@@ -233,17 +255,26 @@ export default function CheckoutPage({ params }: Props) {
 
           {info && (
             <>
-              <Text>Valor: <strong>R$ {Number(info.amount || 0).toFixed(2)}</strong></Text>
-              <Text>Descrição: {info.description || '-'}</Text>
-              <Text>Banco: {info.bank}</Text>
-              <Text>Status: {info.status}</Text>
-              <Text>Expira em: {new Date(info.expiresAt).toLocaleString('pt-BR')}</Text>
+              <div style={{ background: '#fafafa', borderRadius: 8, padding: '12px 16px' }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>
+                  R$ {Number(info.amount || 0).toFixed(2).replace('.', ',')}
+                </div>
+                {info.description && (
+                  <div style={{ color: '#555', marginTop: 4 }}>{info.description}</div>
+                )}
+                {info.status === 'CHECKOUT_OPEN' && info.expiresAt && (
+                  <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
+                    Link válido até {new Date(info.expiresAt).toLocaleString('pt-BR')}
+                  </div>
+                )}
+              </div>
 
               {info.clientName && (
-                <Text>
-                  Cliente: <strong>{info.clientName}</strong>
-                  {info.clientDocumentMasked ? ` (${info.clientDocumentMasked})` : ''}
-                </Text>
+                <Alert
+                  showIcon
+                  type="info"
+                  message={`Esta cobrança está vinculada a ${info.clientName}${info.clientDocumentMasked ? ` (doc. terminado em ${info.clientDocumentMasked})` : ''}`}
+                />
               )}
 
               {info.checkoutAccessMode && info.checkoutAccessMode !== 'PUBLIC' && (
@@ -309,10 +340,24 @@ export default function CheckoutPage({ params }: Props) {
                 />
               )}
 
-              {info.status === 'CHECKOUT_OPEN' && step === 0 && (
+              {info.status === 'FAILED' && (
+                <Alert
+                  showIcon
+                  type="error"
+                  message="Falha ao processar pagamento"
+                  description="Revise os dados informados e tente novamente."
+                />
+              )}
+
+              {(info.status === 'CHECKOUT_OPEN' || info.status === 'FAILED') && step === 0 && (
                 <Form
                   form={form}
                   layout="vertical"
+                  onValuesChange={() => {
+                    if (error) {
+                      setError(null);
+                    }
+                  }}
                   initialValues={{ instrument: defaultInstrument }}
                 >
                   <Form.Item
@@ -323,7 +368,12 @@ export default function CheckoutPage({ params }: Props) {
                     <Radio.Group>
                       <Space direction="vertical">
                         {info.allowedInstruments.map((method) => (
-                          <Radio key={method} value={method}>{method}</Radio>
+                          <Radio key={method} value={method}>
+                            {method === 'PIX_IMMEDIATE' ? '⚡ PIX (pagamento na hora)'
+                              : method === 'PIX_DUE' ? '📅 PIX com vencimento'
+                              : method === 'BOLETO' ? '🏦 Boleto bancário'
+                              : method}
+                          </Radio>
                         ))}
                       </Space>
                     </Radio.Group>
@@ -345,47 +395,55 @@ export default function CheckoutPage({ params }: Props) {
                     <Input />
                   </Form.Item>
 
-                  <Button onClick={onLookupClient} loading={lookingUpClient}>
+                  <Button onClick={onLookupClient} loading={lookingUpClient} style={{ marginBottom: 16 }}>
                     Buscar meus dados
                   </Button>
 
                   {requiresDocumentValidation && (
-                    <Button onClick={onIdentify} loading={identifying}>
+                    <Button onClick={onIdentify} loading={identifying} style={{ marginBottom: 16 }}>
                       Validar identidade
                     </Button>
                   )}
 
-                  <Form.Item label="E-mail" name="payerEmail">
+                  <Form.Item label="E-mail (opcional)" name="payerEmail">
                     <Input />
                   </Form.Item>
 
-                  <Form.Item label="Telefone" name="payerPhone">
+                  <Form.Item label="Telefone (opcional)" name="payerPhone">
                     <Input />
                   </Form.Item>
 
                   {(info.allowedInstruments.includes('PIX_IMMEDIATE') || info.allowedInstruments.includes('PIX_DUE')) && (
                     <Form.Item
-                      label="Chave PIX de quem vai pagar"
+                      label="Sua chave PIX (opcional)"
                       name="pixKey"
-                      extra="Se informar aqui, o sistema usa esta chave no pagamento."
+                      extra="Informe se quiser usar uma chave PIX específica."
                     >
                       <Input placeholder="CPF, email, telefone ou chave aleatoria" />
                     </Form.Item>
                   )}
 
                   <Button type="primary" onClick={onNextToSummary}>
-                    Continuar para resumo
+                    Continuar
                   </Button>
                 </Form>
               )}
 
-              {info.status === 'CHECKOUT_OPEN' && step === 1 && (
+              {(info.status === 'CHECKOUT_OPEN' || info.status === 'FAILED') && step === 1 && (
                 <Card type="inner" title="Resumo da cobrança">
                   <Space direction="vertical" className="w-full">
-                    <Text><strong>Cliente:</strong> {form.getFieldValue('payerName') || '-'}</Text>
+                    <Text><strong>Nome:</strong> {form.getFieldValue('payerName') || '-'}</Text>
                     <Text><strong>Documento:</strong> {form.getFieldValue('payerDocument') || '-'}</Text>
-                    <Text><strong>Método:</strong> {form.getFieldValue('instrument') || defaultInstrument}</Text>
-                    <Text><strong>Valor:</strong> R$ {Number(info.amount || 0).toFixed(2)}</Text>
+                    <Text><strong>Forma de pagamento:</strong> {
+                      (() => {
+                        const m = form.getFieldValue('instrument') || defaultInstrument;
+                        return m === 'PIX_IMMEDIATE' ? 'PIX (pagamento na hora)'
+                          : m === 'PIX_DUE' ? 'PIX com vencimento'
+                          : m === 'BOLETO' ? 'Boleto bancário'
+                          : m;
+                      })()
+                    }</Text>
+                    <Text><strong>Valor a pagar:</strong> R$ {Number(info.amount || 0).toFixed(2).replace('.', ',')}</Text>
 
                     <Space>
                       <Button onClick={() => setStep(0)}>Voltar</Button>
@@ -412,7 +470,7 @@ export default function CheckoutPage({ params }: Props) {
                 </Form>
               )}
 
-              {step === 2 && (
+              {(info?.status === 'PROCESSING' || info?.status === 'PENDING') && step === 2 && (
                 <Alert
                   showIcon
                   type="info"

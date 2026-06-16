@@ -3,6 +3,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 export interface ApiError {
   status: number;
   message: string;
+  detail?: string;
+  details?: string[];
   data?: any;
 }
 
@@ -16,14 +18,24 @@ export class ApiClient {
       'Content-Type': 'application/json',
     };
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...(options.headers || {}),
-      },
-      credentials: 'include', // Include cookies for session
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...(options.headers || {}),
+        },
+        credentials: 'include', // Include cookies for session
+      });
+    } catch (networkErr: any) {
+      const error: ApiError = {
+        status: 0,
+        message: 'Falha na comunicação com o servidor. Tente novamente.',
+        data: networkErr,
+      };
+      throw error;
+    }
 
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
@@ -37,9 +49,14 @@ export class ApiClient {
         errorData = null;
       }
 
+      const detail = errorData?.detail;
+      const details = errorData?.details;
+
       const error: ApiError = {
         status: response.status,
-        message: errorData?.error || errorData?.message || response.statusText,
+        message: detail || errorData?.error || errorData?.message || response.statusText,
+        detail,
+        details,
         data: errorData,
       };
       throw error;

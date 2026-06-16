@@ -16,6 +16,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -61,6 +62,9 @@ public class Transaction {
     @NotNull
     @Column(name = "amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "due_date")
+    private LocalDate dueDate;
 
     @Enumerated(EnumType.STRING)
     @NotNull

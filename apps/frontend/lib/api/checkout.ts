@@ -39,19 +39,19 @@ export interface CheckoutClientLookup {
 
 export const CheckoutApi = {
   getInfo: (token: string) =>
-    ApiClient.get<CheckoutInfo>(`/checkout/${token}`),
+    ApiClient.get<CheckoutInfo>(`/api/checkout/${token}`),
 
   getStatus: (token: string) =>
-    ApiClient.get<CheckoutInfo>(`/checkout/${token}/status`),
+    ApiClient.get<CheckoutInfo>(`/api/checkout/${token}/status`),
 
   lookupClient: (token: string, document: string) =>
     ApiClient.get<CheckoutClientLookup>(
-      `/checkout/${token}/client-lookup?document=${encodeURIComponent(document)}`
+      `/api/checkout/${token}/client-lookup?document=${encodeURIComponent(document)}`
     ),
 
   identify: (token: string, data: CheckoutIdentifyRequest) =>
-    ApiClient.post<CheckoutInfo>(`/checkout/${token}/identify`, data),
+    ApiClient.post<CheckoutInfo>(`/api/checkout/${token}/identify`, data),
 
   pay: (token: string, data: CheckoutPayRequest) =>
-    ApiClient.post<CheckoutInfo>(`/checkout/${token}/pay`, data),
+    ApiClient.post<CheckoutInfo>(`/api/checkout/${token}/pay`, data),
 };

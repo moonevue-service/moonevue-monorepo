@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
         source: "/payments/:path*",
         destination: `${backendBaseUrl}/payments/:path*`,
       },
+      // Must come before /api/:path* to avoid being swallowed by the finance catch-all
+      {
+        source: "/api/checkout/:path*",
+        destination: `${backendBaseUrl}/checkout/:path*`,
+      },
       {
         source: "/api/:path*",
         destination: `${financeBaseUrl}/api/:path*`,
@@ -26,10 +31,6 @@ const nextConfig: NextConfig = {
       {
         source: "/clients/:path*",
         destination: `${backendBaseUrl}/clients/:path*`,
-      },
-      {
-        source: "/checkout/:path*",
-        destination: `${backendBaseUrl}/checkout/:path*`,
       },
     ];
   },

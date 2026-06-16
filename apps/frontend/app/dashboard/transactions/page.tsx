@@ -23,6 +23,8 @@ import {
   BankAccountResponse,
   BankConfigurationResponse,
   ChargeResponseDTO,
+  ClientsApi,
+  ClientSummary,
   Environment,
   FinanceApi,
   PageResponse,
@@ -34,6 +36,11 @@ import {
 const { Title, Text } = Typography;
 
 type PaymentInstrument = 'PIX_IMMEDIATE' | 'PIX_DUE' | 'BOLETO';
+type PaymentAction = 'DIRECT' | 'CHECKOUT';
+
+type PaymentResultModal =
+  | { kind: 'charge'; data: ChargeResponseDTO }
+  | { kind: 'checkout'; data: TransactionSummary };
 
 interface Transaction {
   id: string;
@@ -44,12 +51,16 @@ interface Transaction {
   bank: string;
   instrument: PaymentInstrument;
   externalReference?: string;
+  checkoutToken?: string;
+  checkoutUrl?: string;
+  checkoutExpiresAt?: string;
 }
 
 // FormValues tipada por forma de pagamento
 type FormValues = {
   bankAccountId: number;
   bankConfigurationId: number;
+  clientId?: number;
   instrument: PaymentInstrument;
   // PIX Imediato
   pixAmount?: number;
@@ -117,7 +128,7 @@ export default function TransactionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [instrument, setInstrument] = useState<PaymentInstrument>('PIX_IMMEDIATE');
-  const [resultModal, setResultModal] = useState<ChargeResponseDTO | null>(null);
+  const [resultModal, setResultModal] = useState<PaymentResultModal | null>(null);
   const [loadingTx, setLoadingTx] = useState(false);
   const [totalTx, setTotalTx] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -128,6 +139,8 @@ export default function TransactionsPage() {
   const [configs, setConfigs] = useState<BankConfigurationResponse[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
 
   // Carrega transações do banco
   const loadTransactions = async (page = 0) => {
@@ -144,6 +157,9 @@ export default function TransactionsPage() {
           bank: t.bank ?? '',
           instrument: descriptionToInstrument(t.description),
           externalReference: t.externalReference,
+          checkoutToken: t.checkoutToken,
+          checkoutUrl: t.checkoutUrl,
+          checkoutExpiresAt: t.checkoutExpiresAt,
         }))
       );
       setTotalTx(resp.totalElements);
@@ -162,15 +178,31 @@ export default function TransactionsPage() {
   // Carrega contas ao abrir o modal
   const handleOpenModal = async () => {
     setModalOpen(true);
-    if (!user?.tenantId || accounts.length > 0) return;
-    setLoadingAccounts(true);
-    try {
-      const data = await FinanceApi.listBankAccounts(user.tenantId);
-      setAccounts(data.filter((a) => a.active));
-    } catch {
-      message.error('Erro ao carregar contas bancárias');
-    } finally {
-      setLoadingAccounts(false);
+    if (!user?.tenantId) return;
+
+    if (accounts.length === 0) {
+      setLoadingAccounts(true);
+      try {
+        const data = await FinanceApi.listBankAccounts(user.tenantId);
+        setAccounts(data.filter((a) => a.active));
+      } catch {
+        message.error('Erro ao carregar contas bancárias');
+      } finally {
+        setLoadingAccounts(false);
+      }
+    }
+
+    if (clients.length === 0) {
+      setLoadingClients(true);
+      try {
+        const page = await ClientsApi.list({ page: 0, size: 100 });
+        const activeClients = page.content.filter((c) => c.status === 'ACTIVE');
+        setClients(activeClients);
+      } catch {
+        message.error('Erro ao carregar clientes');
+      } finally {
+        setLoadingClients(false);
+      }
     }
   };
 
@@ -200,12 +232,123 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleSubmit = async (values: FormValues) => {
+  const handleClientChange = (clientId?: number) => {
+    if (!clientId) {
+      return;
+    }
+
+    const selectedClient = clients.find((client) => client.id === clientId);
+    if (!selectedClient) return;
+
+    const normalizedDocument = selectedClient.cpfCnpj?.replaceAll(/[^0-9]/g, '') || '';
+    const isCpf = normalizedDocument.length === 11;
+    const isCnpj = normalizedDocument.length === 14;
+
+    form.setFieldsValue({
+      pixNome: selectedClient.name,
+      pixCpf: isCpf ? normalizedDocument : undefined,
+      pixCnpj: isCnpj ? normalizedDocument : undefined,
+      pixDueNome: selectedClient.name,
+      pixDueCpf: isCpf ? normalizedDocument : undefined,
+      pixDueCnpj: isCnpj ? normalizedDocument : undefined,
+      boletoNome: selectedClient.name,
+      boletoCpf: isCpf ? normalizedDocument : undefined,
+      boletoEmail: selectedClient.email || undefined,
+    });
+  };
+
+  const handleSubmit = async (values: FormValues, action: PaymentAction) => {
     const selectedAccount = accounts.find((a) => a.id === values.bankAccountId);
     const bank = (selectedAccount?.bank ?? 'EFI') as PaymentBankType;
     const bankConfigurationId = values.bankConfigurationId;
     setSubmitting(true);
     try {
+      if (action === 'DIRECT') {
+        if (values.instrument === 'PIX_IMMEDIATE' && !values.pixAmount) {
+          throw new Error('Informe o valor do PIX');
+        }
+
+        if (values.instrument === 'PIX_DUE') {
+          if (!values.pixDueTxid) throw new Error('Informe o TXID');
+          if (!values.pixDueDataVencimento) throw new Error('Informe a data de vencimento');
+          if (!values.pixDueAmount) throw new Error('Informe o valor');
+        }
+
+        if (values.instrument === 'BOLETO') {
+          if (!values.boletoNome) throw new Error('Informe o nome do cliente');
+          if (!values.boletoCpf) throw new Error('Informe o CPF');
+          if (!values.boletoExpireAt) throw new Error('Informe o vencimento');
+          if (!values.boletoItemValue) throw new Error('Informe o valor');
+        }
+      }
+
+      const buildCheckoutDescription = () => {
+        if (values.instrument === 'PIX_IMMEDIATE') {
+          return values.pixDescription?.trim() || `Checkout PIX Imediato R$ ${Number(values.pixAmount ?? 0).toFixed(2)}`;
+        }
+
+        if (values.instrument === 'PIX_DUE') {
+          return values.pixDueSolicitacao?.trim() || (
+            values.pixDueDataVencimento
+              ? `Checkout PIX com vencimento ${values.pixDueDataVencimento}`
+              : 'Checkout PIX com vencimento'
+          );
+        }
+
+        return values.boletoMessage?.trim() || `Checkout boleto ${values.boletoItemName ?? 'Cobrança'}`;
+      };
+
+      const buildCheckoutAmount = () => {
+        if (values.instrument === 'PIX_IMMEDIATE') {
+          return values.pixAmount ?? 0;
+        }
+
+        if (values.instrument === 'PIX_DUE') {
+          return values.pixDueAmount ?? 0;
+        }
+
+        return values.boletoItemValue ?? 0;
+      };
+
+      if (action === 'CHECKOUT') {
+        const response = await PaymentApi.createCheckoutDraft({
+          bankConfigurationId,
+          amount: buildCheckoutAmount(),
+          description: buildCheckoutDescription(),
+          instrument: values.instrument,
+          clientId: values.clientId,
+          checkoutAccessMode: values.clientId ? 'CLIENT_LOGIN' : 'PUBLIC',
+          pixKey:
+            values.instrument === 'PIX_IMMEDIATE'
+              ? values.pixChave || undefined
+              : values.instrument === 'PIX_DUE'
+                ? values.pixDueChave || undefined
+                : undefined,
+          expiresInHours: 24,
+        });
+
+        const newTx: Transaction = {
+          id: String(response.id),
+          amount: Number(response.amount ?? buildCheckoutAmount()),
+          status: (response.status as Transaction['status']) || 'PENDING',
+          description: response.description ?? buildCheckoutDescription(),
+          createdAt: response.createdAt ?? new Date().toISOString(),
+          bank: selectedAccount?.bank ?? 'EFI',
+          instrument: values.instrument,
+          externalReference: response.checkoutToken ? String(response.checkoutToken) : response.checkoutUrl,
+          checkoutToken: response.checkoutToken,
+          checkoutUrl: response.checkoutUrl,
+          checkoutExpiresAt: response.checkoutExpiresAt,
+        };
+
+        setTransactions((prev) => [newTx, ...prev]);
+        handleCloseModal();
+        setResultModal({ kind: 'checkout', data: response });
+        loadTransactions(0);
+        setCurrentPage(1);
+        return;
+      }
+
       let response: ChargeResponseDTO;
       let description = '';
 
@@ -214,6 +357,7 @@ export default function TransactionsPage() {
         response = await PaymentApi.createPixImmediate({
           bank,
           bankConfigurationId,
+          clientId: values.clientId,
           payment: {
             amount: values.pixAmount!,
             solicitacaoPagador: values.pixDescription || undefined,
@@ -229,6 +373,7 @@ export default function TransactionsPage() {
         response = await PaymentApi.createPixDue({
           bank,
           bankConfigurationId,
+          clientId: values.clientId,
           payment: {
             txid: values.pixDueTxid!,
             dataDeVencimento: values.pixDueDataVencimento!,
@@ -245,6 +390,7 @@ export default function TransactionsPage() {
         response = await PaymentApi.createBoleto({
           bank,
           bankConfigurationId,
+          clientId: values.clientId,
           payment: {
             expireAt: values.boletoExpireAt!,
             message: values.boletoMessage || undefined,
@@ -276,7 +422,7 @@ export default function TransactionsPage() {
 
       setTransactions((prev) => [newTx, ...prev]);
       handleCloseModal();
-      setResultModal(response);
+      setResultModal({ kind: 'charge', data: response });
       // Recarrega a lista para incluir a transação persistida com dados do BD
       loadTransactions(0);
       setCurrentPage(1);
@@ -312,6 +458,11 @@ export default function TransactionsPage() {
         <div>
           {record.externalReference && (
             <Text code copyable style={{ fontSize: 12 }}>{record.externalReference}</Text>
+          )}
+          {record.checkoutUrl && (
+            <div style={{ marginTop: 4 }}>
+              <a href={record.checkoutUrl} target="_blank" rel="noreferrer">Abrir checkout</a>
+            </div>
           )}
           {record.description && (
             <div><Text type="secondary" style={{ fontSize: 12 }}>{record.description}</Text></div>
@@ -375,11 +526,18 @@ export default function TransactionsPage() {
 
   const pixDueFields = (
     <>
-      <Form.Item label="TXID (identificador único)" name="pixDueTxid" rules={[{ required: true, message: 'Informe o TXID' }]}>
+      <Form.Item
+        label="TXID (identificador único)"
+        name="pixDueTxid"
+      >
         <Input placeholder="Ex: abc123 (32 chars alfanumérico)" />
       </Form.Item>
       <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item label="Data de Vencimento" name="pixDueDataVencimento" rules={[{ required: true, message: 'Informe a data' }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="Data de Vencimento"
+          name="pixDueDataVencimento"
+          style={{ flex: 1 }}
+        >
           <Input type="date" />
         </Form.Item>
         <Form.Item label="Valor (R$)" name="pixDueAmount" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]} style={{ flex: 1 }}>
@@ -404,10 +562,18 @@ export default function TransactionsPage() {
   const boletoFields = (
     <>
       <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item label="Nome do cliente" name="boletoNome" rules={[{ required: true, message: 'Informe o nome' }]} style={{ flex: 2 }}>
+        <Form.Item
+          label="Nome do cliente"
+          name="boletoNome"
+          style={{ flex: 2 }}
+        >
           <Input />
         </Form.Item>
-        <Form.Item label="CPF" name="boletoCpf" rules={[{ required: true, message: 'Informe o CPF' }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="CPF"
+          name="boletoCpf"
+          style={{ flex: 1 }}
+        >
           <Input placeholder="000.000.000-00" />
         </Form.Item>
       </Space>
@@ -415,13 +581,22 @@ export default function TransactionsPage() {
         <Form.Item label="E-mail" name="boletoEmail" style={{ flex: 2 }}>
           <Input type="email" placeholder="Opcional" />
         </Form.Item>
-        <Form.Item label="Vencimento" name="boletoExpireAt" rules={[{ required: true, message: 'Informe a data' }]} style={{ flex: 1 }}>
+        <Form.Item
+          label="Vencimento"
+          name="boletoExpireAt"
+          style={{ flex: 1 }}
+        >
           <Input type="date" />
         </Form.Item>
       </Space>
       <Divider plain style={{ fontSize: 12 }}>Item da cobrança</Divider>
       <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item label="Descrição do item" name="boletoItemName" initialValue="Cobrança" rules={[{ required: true }]} style={{ flex: 2 }}>
+        <Form.Item
+          label="Descrição do item"
+          name="boletoItemName"
+          initialValue="Cobrança"
+          style={{ flex: 2 }}
+        >
           <Input />
         </Form.Item>
         <Form.Item label="Valor (R$)" name="boletoItemValue" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]} style={{ flex: 1 }}>
@@ -441,10 +616,10 @@ export default function TransactionsPage() {
           <Title level={3} style={{ marginBottom: 4 }}>
             Transações
           </Title>
-          <Text type="secondary">Crie cobranças e acompanhe o histórico da sessão.</Text>
+          <Text type="secondary">Crie cobranças imediatas ou gere um checkout interno para completar depois.</Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenModal}>
-          Novo Pagamento
+          Nova Transação
         </Button>
       </div>
 
@@ -466,24 +641,92 @@ export default function TransactionsPage() {
           },
         }}
         locale={{
-          emptyText: 'Nenhuma transação encontrada. Clique em "Novo Pagamento" para criar uma cobrança.',
+          emptyText: 'Nenhuma transação encontrada. Clique em "Nova Transação" para começar.',
         }}
         scroll={{ x: 650 }}
       />
 
       {/* ── Modal de criação ── */}
       <Modal
-        title="Nova Cobrança"
+        title="Nova Transação"
         open={modalOpen}
         onCancel={handleCloseModal}
-        onOk={() => form.submit()}
-        okText="Processar pagamento"
         cancelText="Cancelar"
         confirmLoading={submitting}
         width={600}
         destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={handleCloseModal} disabled={submitting}>
+            Cancelar
+          </Button>,
+          <Button
+            key="checkout"
+            onClick={async () => {
+              try {
+                const values = await form.validateFields();
+                await handleSubmit(values, 'CHECKOUT');
+              } catch {
+                // Validação do formulário ou do submit
+              }
+            }}
+            loading={submitting}
+          >
+            Salvar transação
+          </Button>,
+          <Button
+            key="direct"
+            type="primary"
+            onClick={async () => {
+              try {
+                const values = await form.validateFields();
+                await handleSubmit(values, 'DIRECT');
+              } catch {
+                // Validação do formulário ou do submit
+              }
+            }}
+            loading={submitting}
+          >
+            Gerar no banco
+          </Button>,
+        ]}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+          {clients.length === 0 && !loadingClients && (
+            <Alert
+              showIcon
+              type="warning"
+              message="Nenhum cliente ativo cadastrado"
+              description="Cadastre um cliente para habilitar a emissão direta no banco."
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          <Alert
+            showIcon
+            type="info"
+            message="Ações disponíveis"
+            description="Use 'Salvar transação' para criar o checkout interno primeiro. Use 'Gerar no banco' para emitir a cobrança imediatamente na EFI."
+            style={{ marginBottom: 16 }}
+          />
+
+          <Form.Item
+            label="Cliente"
+            name="clientId"
+            extra="Opcional. Se informado, a transação fica vinculada ao cliente e com link de checkout."
+          >
+            <Select
+              placeholder="Selecione um cliente"
+              loading={loadingClients}
+              allowClear
+              onChange={handleClientChange}
+              options={clients.map((c) => ({
+                value: c.id,
+                label: `${c.name} (${c.cpfCnpj})`,
+              }))}
+              notFoundContent={loadingClients ? 'Carregando...' : 'Nenhum cliente ativo cadastrado'}
+            />
+          </Form.Item>
+
           {/* Conta bancária */}
           <Form.Item
             label="Conta Bancária"
@@ -570,7 +813,7 @@ export default function TransactionsPage() {
 
       {/* ── Modal de resultado ── */}
       <Modal
-        title="Cobrança criada com sucesso"
+        title={resultModal?.kind === 'checkout' ? 'Checkout criado com sucesso' : 'Cobrança criada com sucesso'}
         open={!!resultModal}
         onCancel={() => setResultModal(null)}
         footer={[
@@ -581,12 +824,44 @@ export default function TransactionsPage() {
         {resultModal && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>ID da cobrança</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {resultModal.kind === 'checkout' ? 'ID da transação' : 'ID da cobrança'}
+              </Text>
               <br />
-              <Text copyable>{resultModal.id}</Text>
+              <Text copyable>{resultModal.data.id}</Text>
             </div>
 
-            {resultModal.pixCopiaECola && (
+            {resultModal.kind === 'checkout' && resultModal.data.checkoutUrl && (
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Link do checkout</Text>
+                <Alert
+                  message={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Text
+                        style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}
+                      >
+                        {resultModal.data.checkoutUrl}
+                      </Text>
+                      <Button
+                        size="small"
+                        icon={<CopyOutlined />}
+                        onClick={() => {
+                          navigator.clipboard.writeText(resultModal.data.checkoutUrl!);
+                          message.success('Copiado!');
+                        }}
+                      />
+                      <Button size="small" href={resultModal.data.checkoutUrl} target="_blank" rel="noreferrer">
+                        Abrir
+                      </Button>
+                    </div>
+                  }
+                  type="info"
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+            )}
+
+            {resultModal.kind === 'charge' && resultModal.data.pixCopiaECola && (
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>PIX Copia e Cola</Text>
                 <Alert
@@ -595,13 +870,13 @@ export default function TransactionsPage() {
                       <Text
                         style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}
                       >
-                        {resultModal.pixCopiaECola}
+                        {resultModal.data.pixCopiaECola}
                       </Text>
                       <Button
                         size="small"
                         icon={<CopyOutlined />}
                         onClick={() => {
-                          navigator.clipboard.writeText(resultModal.pixCopiaECola!);
+                          navigator.clipboard.writeText(resultModal.data.pixCopiaECola!);
                           message.success('Copiado!');
                         }}
                       />
@@ -613,20 +888,20 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {resultModal.barcode && (
+            {resultModal.kind === 'charge' && resultModal.data.barcode && (
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>Linha Digitável</Text>
                 <Alert
                   message={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Text style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}>
-                        {resultModal.barcode}
+                        {resultModal.data.barcode}
                       </Text>
                       <Button
                         size="small"
                         icon={<CopyOutlined />}
                         onClick={() => {
-                          navigator.clipboard.writeText(resultModal.barcode!);
+                          navigator.clipboard.writeText(resultModal.data.barcode!);
                           message.success('Copiado!');
                         }}
                       />
@@ -638,20 +913,20 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {(resultModal.billetLink || resultModal.pdfLink || resultModal.link) && (
+            {resultModal.kind === 'charge' && (resultModal.data.billetLink || resultModal.data.pdfLink || resultModal.data.link) && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {resultModal.billetLink && (
-                  <Button href={resultModal.billetLink} target="_blank" size="small">
+                {resultModal.data.billetLink && (
+                  <Button href={resultModal.data.billetLink} target="_blank" size="small">
                     Abrir Boleto
                   </Button>
                 )}
-                {resultModal.pdfLink && (
-                  <Button href={resultModal.pdfLink} target="_blank" size="small">
+                {resultModal.data.pdfLink && (
+                  <Button href={resultModal.data.pdfLink} target="_blank" size="small">
                     PDF
                   </Button>
                 )}
-                {resultModal.link && (
-                  <Button href={resultModal.link} target="_blank" size="small">
+                {resultModal.data.link && (
+                  <Button href={resultModal.data.link} target="_blank" size="small">
                     Link de Pagamento
                   </Button>
                 )}
@@ -659,29 +934,36 @@ export default function TransactionsPage() {
             )}
 
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              {resultModal.amount && (
+              {resultModal.data.amount && (
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Valor</Text>
                   <br />
                   <Text strong>
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(resultModal.amount))}
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(resultModal.data.amount))}
                   </Text>
                 </div>
               )}
-              {resultModal.status && (
+              {resultModal.data.status && (
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Status</Text>
                   <br />
-                  <Tag color={STATUS_COLORS[resultModal.status] ?? 'default'}>
-                    {STATUS_LABELS[resultModal.status] ?? resultModal.status}
+                  <Tag color={STATUS_COLORS[resultModal.data.status] ?? 'default'}>
+                    {STATUS_LABELS[resultModal.data.status] ?? resultModal.data.status}
                   </Tag>
                 </div>
               )}
-              {resultModal.dueDate && (
+              {resultModal.kind === 'charge' && resultModal.data.dueDate && (
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Vencimento</Text>
                   <br />
-                  <Text>{resultModal.dueDate}</Text>
+                  <Text>{resultModal.data.dueDate}</Text>
+                </div>
+              )}
+              {resultModal.kind === 'checkout' && resultModal.data.checkoutExpiresAt && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Expira em</Text>
+                  <br />
+                  <Text>{new Date(resultModal.data.checkoutExpiresAt).toLocaleString('pt-BR')}</Text>
                 </div>
               )}
             </div>

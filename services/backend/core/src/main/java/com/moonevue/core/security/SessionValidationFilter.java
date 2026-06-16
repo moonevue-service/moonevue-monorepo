@@ -84,11 +84,17 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                 ? list.stream().filter(String.class::isInstance).map(String.class::cast).toList()
                 : List.of();
 
+        List<String> permissions = body.get("permissions") instanceof List<?> list
+            ? list.stream().filter(String.class::isInstance).map(String.class::cast).toList()
+            : List.of();
+
         Long tenantId = body.get("tenantId") instanceof Number n ? n.longValue() : null;
         Long userId = body.get("userId") instanceof Number n ? n.longValue() : null;
 
-        var authorities = roles.stream().map(SimpleGrantedAuthority::new).toList();
-        return new IntrospectedAuthToken(email, authorities, tenantId, userId);
+        var authorities = new java.util.LinkedHashSet<SimpleGrantedAuthority>();
+        roles.stream().map(SimpleGrantedAuthority::new).forEach(authorities::add);
+        permissions.stream().map(SimpleGrantedAuthority::new).forEach(authorities::add);
+        return new IntrospectedAuthToken(email, new java.util.ArrayList<>(authorities), tenantId, userId);
     }
 
     private HttpHeaders buildHeaders(String sid) {

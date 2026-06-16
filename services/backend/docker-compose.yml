@@ -74,7 +74,7 @@ services:
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
         mvn -q -DskipTests install -pl auth -am;
-        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/auth/target/auth-1.0.0.jar
+        java -Djava.security.egd=file:/dev/./urandom -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/auth/target/auth-1.0.0.jar
       '
     depends_on:
       postgres:
@@ -119,7 +119,7 @@ services:
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
         mvn -q -DskipTests install -pl gateway -am;
-        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/gateway/target/gateway.jar
+        java -Djava.security.egd=file:/dev/./urandom -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/gateway/target/gateway.jar
       '
     depends_on:
       auth:
@@ -165,7 +165,7 @@ services:
         unset JAVA_TOOL_OPTIONS;
         cd /app/moonevue;
         mvn -q -DskipTests install -pl finance -am;
-        java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/finance/target/finance.jar
+        java -Djava.security.egd=file:/dev/./urandom -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar /app/moonevue/finance/target/finance.jar
       '
     depends_on:
       auth:

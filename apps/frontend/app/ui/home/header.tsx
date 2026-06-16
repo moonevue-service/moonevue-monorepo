@@ -9,6 +9,7 @@ const links = [
   { href: '#produto', label: 'Produto' },
   { href: '#beneficios', label: 'Benefícios' },
   { href: '#integracoes', label: 'Integrações' },
+  { href: '/client-area', label: 'Área do cliente' },
 ];
 
 export default function Header() {
@@ -47,15 +48,22 @@ export default function Header() {
           className="hidden md:flex"
           style={{ display: 'flex', gap: 32, alignItems: 'center' }}
         >
-          {links.map((item) => (
-            <a key={item.href} href={item.href} style={navStyle}>
-              {item.label}
-            </a>
-          ))}
+          {links.map((item) =>
+            item.href.startsWith('#') ? (
+              <a key={item.href} href={item.href} style={navStyle}>
+                {item.label}
+              </a>
+            ) : (
+              <Link key={item.href} href={item.href} style={navStyle}>
+                {item.label}
+              </Link>
+            )
+          )}
         </nav>
 
         {/* Desktop auth buttons */}
         <div className="hidden md:flex" style={{ display: 'flex', gap: 8 }}>
+          <Button href="/client-area">Sou cliente</Button>
           <Button href="/login">Entrar</Button>
           <Button type="primary" href="/register">
             Criar conta
@@ -76,18 +84,32 @@ export default function Header() {
       {mobileOpen && (
         <div style={{ borderTop: '1px solid #f0f0f0', background: '#fff', padding: '16px 24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {links.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                style={{ ...navStyle, padding: '8px 0', display: 'block' }}
-                onClick={() => setMobileOpen(false)}
-              >
-                {item.label}
-              </a>
-            ))}
+            {links.map((item) =>
+              item.href.startsWith('#') ? (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  style={{ ...navStyle, padding: '8px 0', display: 'block' }}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{ ...navStyle, padding: '8px 0', display: 'block' }}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              )
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <Button href="/client-area" block>
+              Sou cliente
+            </Button>
             <Button href="/login" block>
               Entrar
             </Button>

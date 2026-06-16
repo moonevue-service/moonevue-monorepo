@@ -24,6 +24,7 @@ export interface User {
   email: string;
   tenantId: number | null;
   roles: string[];
+  permissions?: string[];
 }
 
 export interface EmployeeRegisterRequest {

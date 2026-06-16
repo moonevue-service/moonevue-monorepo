@@ -86,14 +86,8 @@ public class EfiBankIntegration implements BankIntegration {
     private String callPixImmediate(ChargeRequestDTO req, BankConfiguration cfg) throws Exception {
         EnvUrls urls = getPixUrls(cfg);
 
-        // Credenciais namespaced (pix.*)
-        String clientId = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_ID, "pix.client_id");
-        String clientSecret = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_SECRET, "pix.client_secret");
-        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.SCOPE, null);
-        OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
-
         log.info("[EFI] PIX Imediato: tokenUrl={} env={}", urls.tokenUrl, cfg.getEnvironment());
-        AccessToken token = tokenService.getTokenFor(BankType.EFI, urls.tokenUrl, creds, cfg);
+        AccessToken token = getNamespacedToken(cfg, BankConfigKeys.PIX_NS, urls.tokenUrl, true);
 
         // Monta body
         ObjectNode body = mapper.createObjectNode();
@@ -101,10 +95,7 @@ public class EfiBankIntegration implements BankIntegration {
         Integer exp = req.payment().pixImmediate().expiracaoSeconds();
         calendario.put("expiracao", exp != null ? exp : 3600);
 
-        ObjectNode devedor = body.putObject("devedor");
-        if (req.payment().pixImmediate().cpf() != null) devedor.put("cpf", req.payment().pixImmediate().cpf());
-        if (req.payment().pixImmediate().cnpj() != null) devedor.put("cnpj", req.payment().pixImmediate().cnpj());
-        if (req.payment().pixImmediate().nome() != null) devedor.put("nome", req.payment().pixImmediate().nome());
+        maybePutDevedorImmediate(body, req.payment().pixImmediate());
 
         ObjectNode valor = body.putObject("valor");
         valor.put("original", formatAmount(req.payment().pixImmediate().amount()));
@@ -129,12 +120,7 @@ public class EfiBankIntegration implements BankIntegration {
 
     private String callPixDue(ChargeRequestDTO req, BankConfiguration cfg) throws Exception {
         EnvUrls urls = getPixUrls(cfg);
-
-        String clientId = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_ID, "pix.clientId");
-        String clientSecret = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.CLIENT_SECRET, "pix.clientSecret");
-        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), BankConfigKeys.PIX_NS + "." + BankConfigKeys.SCOPE, null);
-        OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
-        AccessToken token = tokenService.getTokenFor(BankType.EFI, urls.tokenUrl, creds, cfg);
+        AccessToken token = getNamespacedToken(cfg, BankConfigKeys.PIX_NS, urls.tokenUrl, true);
 
         var p = req.payment().pixDue();
         if (p.txid() == null || p.txid().isBlank()) {
@@ -146,14 +132,7 @@ public class EfiBankIntegration implements BankIntegration {
         calendario.put("dataDeVencimento", p.dataDeVencimento().toString());
         if (p.validadeAposVencimento() != null) calendario.put("validadeAposVencimento", p.validadeAposVencimento());
 
-        ObjectNode devedor = body.putObject("devedor");
-        if (p.cpf() != null) devedor.put("cpf", p.cpf());
-        if (p.cnpj() != null) devedor.put("cnpj", p.cnpj());
-        if (p.nome() != null) devedor.put("nome", p.nome());
-        if (p.logradouro() != null) devedor.put("logradouro", p.logradouro());
-        if (p.cidade() != null) devedor.put("cidade", p.cidade());
-        if (p.uf() != null) devedor.put("uf", p.uf());
-        if (p.cep() != null) devedor.put("cep", p.cep());
+        maybePutDevedorDue(body, p);
 
         ObjectNode valor = body.putObject("valor");
         valor.put("original", formatAmount(p.amountOriginal()));
@@ -207,12 +186,7 @@ public class EfiBankIntegration implements BankIntegration {
 
     private String callChargesBoleto(ChargeRequestDTO req, BankConfiguration cfg) throws Exception {
         EnvUrls urls = getChargesUrls(cfg);
-
-        String clientId = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.CHARGES_NS + "." + BankConfigKeys.CLIENT_ID, "charges.clientId");
-        String clientSecret = ExtraConfigUtils.requireString(cfg.getExtraConfig(), BankConfigKeys.CHARGES_NS + "." + BankConfigKeys.CLIENT_SECRET, "charges.clientSecret");
-        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), BankConfigKeys.CHARGES_NS + "." + BankConfigKeys.SCOPE, null);
-        OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
-        AccessToken token = tokenService.getTokenFor(BankType.EFI, urls.tokenUrl, creds, cfg);
+        AccessToken token = getNamespacedToken(cfg, BankConfigKeys.CHARGES_NS, urls.tokenUrl, false);
 
         ObjectNode body = mapper.createObjectNode();
         ArrayNode items = body.putArray("items");
@@ -345,6 +319,25 @@ public class EfiBankIntegration implements BankIntegration {
         return node.has(field) && !node.get(field).isNull() ? node.get(field).asText(null) : null;
     }
 
+    private AccessToken getNamespacedToken(BankConfiguration cfg,
+                                           String namespace,
+                                           String tokenUrl,
+                                           boolean useMtlsForToken) {
+        String clientId = ExtraConfigUtils.requireString(
+                cfg.getExtraConfig(),
+                namespace + "." + BankConfigKeys.CLIENT_ID,
+                namespace + "." + BankConfigKeys.CLIENT_ID
+        );
+        String clientSecret = ExtraConfigUtils.requireString(
+                cfg.getExtraConfig(),
+                namespace + "." + BankConfigKeys.CLIENT_SECRET,
+                namespace + "." + BankConfigKeys.CLIENT_SECRET
+        );
+        String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), namespace + "." + BankConfigKeys.SCOPE, null);
+        OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
+        return tokenService.getTokenFor(BankType.EFI, tokenUrl, creds, cfg, useMtlsForToken);
+    }
+
     private Map<String, String> bearerHeaders(AccessToken token) {
         Map<String, String> h = new HashMap<>();
         h.put("Content-Type", "application/json");
@@ -355,6 +348,63 @@ public class EfiBankIntegration implements BankIntegration {
     private String formatAmount(BigDecimal v) {
         if (v == null) return null;
         return v.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private void maybePutDevedorImmediate(ObjectNode body, ChargeRequestDTO.PixImmediate p) {
+        if (p == null) return;
+
+        String nome = trimToNull(p.nome());
+        String cpf = trimToNull(p.cpf());
+        String cnpj = trimToNull(p.cnpj());
+
+        // A EFI valida 'devedor' com regras oneOf e exige nome quando o objeto existe.
+        // Para deixar o devedor opcional, omitimos o bloco quando estiver incompleto.
+        if (nome == null) {
+            if (cpf != null || cnpj != null) {
+                log.warn("[EFI] Ignorando devedor em PIX imediato por ausência de nome (cpf/cnpj recebido). config={}", body.path("chave").asText("?"));
+            }
+            return;
+        }
+
+        ObjectNode devedor = body.putObject("devedor");
+        devedor.put("nome", nome);
+        if (cpf != null) devedor.put("cpf", cpf);
+        if (cnpj != null) devedor.put("cnpj", cnpj);
+    }
+
+    private void maybePutDevedorDue(ObjectNode body, ChargeRequestDTO.PixDue p) {
+        if (p == null) return;
+
+        String nome = trimToNull(p.nome());
+        String cpf = trimToNull(p.cpf());
+        String cnpj = trimToNull(p.cnpj());
+
+        if (nome == null) {
+            if (cpf != null || cnpj != null || trimToNull(p.logradouro()) != null || trimToNull(p.cidade()) != null || trimToNull(p.uf()) != null || trimToNull(p.cep()) != null) {
+                log.warn("[EFI] Ignorando devedor em PIX com vencimento por ausência de nome");
+            }
+            return;
+        }
+
+        ObjectNode devedor = body.putObject("devedor");
+        devedor.put("nome", nome);
+        if (cpf != null) devedor.put("cpf", cpf);
+        if (cnpj != null) devedor.put("cnpj", cnpj);
+
+        String logradouro = trimToNull(p.logradouro());
+        String cidade = trimToNull(p.cidade());
+        String uf = trimToNull(p.uf());
+        String cep = trimToNull(p.cep());
+        if (logradouro != null) devedor.put("logradouro", logradouro);
+        if (cidade != null) devedor.put("cidade", cidade);
+        if (uf != null) devedor.put("uf", uf);
+        if (cep != null) devedor.put("cep", cep);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private record EnvUrls(String apiBase, String tokenUrl) {}

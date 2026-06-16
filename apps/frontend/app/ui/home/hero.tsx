@@ -78,6 +78,9 @@ export default function Hero() {
             <Button size="large" href="/login" icon={<ArrowRightOutlined />} iconPosition="end">
               Entrar no painel
             </Button>
+            <Button size="large" href="/client-area">
+              Acompanhar cobrança
+            </Button>
           </div>
         </div>
       </section>

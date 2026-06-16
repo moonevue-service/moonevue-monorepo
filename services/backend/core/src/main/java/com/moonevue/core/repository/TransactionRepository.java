@@ -20,6 +20,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
        Optional<Transaction> findFirstByExternalReferenceOrderByIdDesc(String externalReference);
 
+       Optional<Transaction> findByIdAndTenantId(Long id, Long tenantId);
+
        Page<Transaction> findByTenantIdAndClientIdOrderByCreatedAtDesc(Long tenantId, Long clientId, Pageable pageable);
 
     @Query("""

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   App,
   Button,
@@ -8,14 +8,17 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Tag,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { ClientsApi, ClientSummary, ClientUpsertRequest, TransactionSummary } from '@/lib/api';
+import { useAuth } from '@/app/providers';
+import { canAccessClients } from '@/lib/authz';
 
 const { Title, Text } = Typography;
 
@@ -23,6 +26,7 @@ type ClientFormValues = ClientUpsertRequest;
 
 export default function ClientsPage() {
   const { message } = App.useApp();
+  const { user } = useAuth();
   const [form] = Form.useForm<ClientFormValues>();
 
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -32,12 +36,17 @@ export default function ClientsPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   const [selectedClient, setSelectedClient] = useState<ClientSummary | null>(null);
   const [clientTransactions, setClientTransactions] = useState<TransactionSummary[]>([]);
   const [loadingClientTransactions, setLoadingClientTransactions] = useState(false);
 
   const PAGE_SIZE = 50;
+
+  const allowed = canAccessClients(user?.roles, user?.permissions);
 
   const loadClients = async (page = 0) => {
     setLoadingClients(true);
@@ -53,25 +62,57 @@ export default function ClientsPage() {
   };
 
   useEffect(() => {
+    if (!allowed) {
+      return;
+    }
     loadClients(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [allowed]);
+
+  if (!allowed) {
+    return (
+      <div style={{ maxWidth: 760 }}>
+        <Typography.Title level={3} style={{ marginBottom: 8 }}>Clientes</Typography.Title>
+        <Typography.Paragraph type="secondary">
+          Seu perfil atual não possui acesso a esta área.
+        </Typography.Paragraph>
+        <Tag color="red">Permissão necessária: customers.read</Tag>
+      </div>
+    );
+  }
 
   const openCreateModal = () => {
+    setEditingClient(null);
     form.resetFields();
     setModalOpen(true);
   };
 
-  const handleCreateClient = async (values: ClientFormValues) => {
+  const openEditModal = (client: ClientSummary) => {
+    setEditingClient(client);
+    form.setFieldsValue({
+      name: client.name,
+      cpfCnpj: client.cpfCnpj,
+      email: client.email,
+      phone: client.phone,
+    });
+    setModalOpen(true);
+  };
+
+  const handleUpsertClient = async (values: ClientFormValues) => {
     setSubmitting(true);
     try {
-      await ClientsApi.create(values);
+      if (editingClient) {
+        await ClientsApi.update(editingClient.id, values);
+      } else {
+        await ClientsApi.create(values);
+      }
       setModalOpen(false);
+      setEditingClient(null);
       setClientsPage(1);
       await loadClients(0);
-      message.success('Cliente criado com sucesso');
+      message.success(editingClient ? 'Cliente atualizado com sucesso' : 'Cliente criado com sucesso');
     } catch (e: any) {
-      message.error(e?.message || 'Erro ao criar cliente');
+      message.error(e?.message || (editingClient ? 'Erro ao atualizar cliente' : 'Erro ao criar cliente'));
     } finally {
       setSubmitting(false);
     }
@@ -89,6 +130,22 @@ export default function ClientsPage() {
       setLoadingClientTransactions(false);
     }
   };
+
+  const filteredClients = useMemo(() => {
+    const normalized = searchText.trim().toLowerCase();
+
+    return clients.filter((client) => {
+      const matchesText =
+        !normalized ||
+        client.name.toLowerCase().includes(normalized) ||
+        client.email.toLowerCase().includes(normalized) ||
+        client.cpfCnpj.toLowerCase().includes(normalized);
+
+      const matchesStatus = statusFilter === 'ALL' || client.status === statusFilter;
+
+      return matchesText && matchesStatus;
+    });
+  }, [clients, searchText, statusFilter]);
 
   const clientColumns: ColumnsType<ClientSummary> = [
     {
@@ -117,6 +174,16 @@ export default function ClientsPage() {
       width: 170,
       render: (value: string) =>
         new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)),
+    },
+    {
+      title: 'Ações',
+      key: 'actions',
+      width: 120,
+      render: (_, row) => (
+        <Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(row)}>
+          Editar
+        </Button>
+      ),
     },
   ];
 
@@ -167,9 +234,30 @@ export default function ClientsPage() {
 
       <Table
         columns={clientColumns}
-        dataSource={clients}
+        dataSource={filteredClients}
         rowKey="id"
         loading={loadingClients}
+        title={() => (
+          <Space wrap>
+            <Input.Search
+              allowClear
+              placeholder="Buscar por nome, documento ou e-mail"
+              style={{ width: 320 }}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+            <Select
+              value={statusFilter}
+              style={{ width: 180 }}
+              onChange={(value) => setStatusFilter(value)}
+              options={[
+                { label: 'Todos os status', value: 'ALL' },
+                { label: 'Ativo', value: 'ACTIVE' },
+                { label: 'Inativo', value: 'INACTIVE' },
+              ]}
+            />
+          </Space>
+        )}
         pagination={{
           current: clientsPage,
           pageSize: PAGE_SIZE,
@@ -184,15 +272,18 @@ export default function ClientsPage() {
       />
 
       <Modal
-        title="Novo cliente"
+        title={editingClient ? 'Editar cliente' : 'Novo cliente'}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => {
+          setModalOpen(false);
+          setEditingClient(null);
+        }}
         onOk={() => form.submit()}
-        okText="Salvar"
+        okText={editingClient ? 'Salvar alterações' : 'Salvar'}
         confirmLoading={submitting}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={handleCreateClient}>
+        <Form form={form} layout="vertical" onFinish={handleUpsertClient}>
           <Form.Item label="Nome" name="name" rules={[{ required: true, message: 'Informe o nome' }]}>
             <Input />
           </Form.Item>
@@ -215,7 +306,7 @@ export default function ClientsPage() {
           setSelectedClient(null);
           setClientTransactions([]);
         }}
-        width={820}
+        size="large"
       >
         {selectedClient && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">

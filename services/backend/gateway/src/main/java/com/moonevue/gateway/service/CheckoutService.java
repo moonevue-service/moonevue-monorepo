@@ -2,14 +2,17 @@ package com.moonevue.gateway.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moonevue.core.entity.BankConfiguration;
+import com.moonevue.core.entity.Client;
 import com.moonevue.core.entity.Transaction;
 import com.moonevue.core.entity.TransactionLog;
 import com.moonevue.core.enums.CheckoutAccessMode;
+import com.moonevue.core.enums.ClientStatus;
 import com.moonevue.core.enums.Severity;
 import com.moonevue.core.enums.TransactionStatus;
 import com.moonevue.core.enums.TransactionType;
 import com.moonevue.core.repository.TransactionLogRepository;
 import com.moonevue.core.repository.TransactionRepository;
+import com.moonevue.core.repository.ClientRepository;
 import com.moonevue.gateway.dto.ChargeRequestDTO;
 import com.moonevue.gateway.dto.ChargeResponseDTO;
 import com.moonevue.gateway.dto.CheckoutClientLookupDTO;
@@ -41,17 +44,23 @@ public class CheckoutService {
     private final TransactionLogRepository transactionLogRepository;
     private final BankIntegrationFactory integrationFactory;
     private final ObjectMapper objectMapper;
+    private final ClientRepository clientRepository;
+    private final CheckoutClientUpsertService checkoutClientUpsertService;
 
     public CheckoutService(JdbcTemplate jdbcTemplate,
                            TransactionRepository transactionRepository,
                            TransactionLogRepository transactionLogRepository,
                            BankIntegrationFactory integrationFactory,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           ClientRepository clientRepository,
+                           CheckoutClientUpsertService checkoutClientUpsertService) {
         this.jdbcTemplate = jdbcTemplate;
         this.transactionRepository = transactionRepository;
         this.transactionLogRepository = transactionLogRepository;
         this.integrationFactory = integrationFactory;
         this.objectMapper = objectMapper;
+        this.clientRepository = clientRepository;
+        this.checkoutClientUpsertService = checkoutClientUpsertService;
     }
 
     @Transactional(readOnly = true)
@@ -142,7 +151,7 @@ public class CheckoutService {
     }
 
     @Transactional
-    public CheckoutInfoDTO pay(UUID token, CheckoutPayRequest req) {
+    public CheckoutInfoDTO pay(UUID token, CheckoutPayRequest req) throws CheckoutPaymentProcessingException {
         Transaction tx = findCheckoutForPayment(token);
 
         if (tx.getCheckoutInstrument() != null && req.instrument() != null && !tx.getCheckoutInstrument().equals(req.instrument())) {
@@ -154,6 +163,18 @@ public class CheckoutService {
         tx.setPayerDocument(req.payerDocument());
         tx.setPayerPhone(req.payerPhone());
         tx.setStatus(TransactionStatus.PROCESSING);
+
+        // Upsert cliente em transação independente (REQUIRES_NEW): garante o cadastro
+        // mesmo que o processamento do pagamento falhe e a transação do pay sofra rollback.
+        Long clientId = checkoutClientUpsertService.upsertActiveClient(
+                tx.getTenant().getId(),
+                req.payerDocument(),
+                req.payerName(),
+                req.payerEmail(),
+                req.payerPhone());
+        if (clientId != null) {
+            clientRepository.findById(clientId).ifPresent(tx::setClient);
+        }
 
         BankConfiguration config = tx.getBankConfiguration();
         if (config == null) {
@@ -186,7 +207,7 @@ public class CheckoutService {
             tx.setFailureReason(e.getMessage());
             transactionRepository.save(tx);
             log.error("[CheckoutService] Falha no pagamento token={}: {}", token, e.getMessage(), e);
-            throw new RuntimeException("Falha ao processar pagamento: " + e.getMessage(), e);
+            throw new CheckoutPaymentProcessingException("Falha ao processar pagamento: " + e.getMessage(), e);
         }
 
         ChargeResponseDTO resp;
@@ -196,7 +217,7 @@ public class CheckoutService {
             tx.setStatus(TransactionStatus.FAILED);
             tx.setFailureReason("Resposta inválida do provedor");
             transactionRepository.save(tx);
-            throw new IllegalStateException("Resposta inválida do provedor", e);
+            throw new CheckoutPaymentProcessingException("Resposta inválida do provedor", e);
         }
 
         tx.setProviderResponse(responseJson);

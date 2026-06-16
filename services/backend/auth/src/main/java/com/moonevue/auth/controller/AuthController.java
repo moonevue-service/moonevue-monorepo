@@ -2,6 +2,7 @@ package com.moonevue.auth.controller;
 
 import com.moonevue.auth.dto.RegisterRequest;
 import com.moonevue.auth.service.SessionService;
+import com.moonevue.auth.service.PermissionCatalog;
 import com.moonevue.auth.service.UserService;
 import com.moonevue.core.entity.AuthRole;
 import com.moonevue.core.entity.Session;
@@ -41,6 +42,7 @@ public class AuthController {
     private final SessionService sessions;
     private final UserService userService;
     private final RoleRepository roles;
+    private final PermissionCatalog permissionCatalog;
 
     @Value("${moonevue.auth.cookie.name}")
     private String cookieName;
@@ -170,6 +172,7 @@ public class AuthController {
         body.put("email", u.getEmail());
         body.put("tenantId", t != null ? t.getId() : null);
         body.put("roles", u.getRoles().stream().map(AuthRole::getName).toList());
+        body.put("permissions", permissionCatalog.permissionsForRoles(u.getRoles().stream().map(AuthRole::getName).toList()));
         return ResponseEntity.ok(body);
     }
 

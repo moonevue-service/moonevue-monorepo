@@ -32,6 +32,9 @@ public class ClientController {
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
         }
+        if (!hasAnyAuthority(authentication, "customers.read")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "forbidden: customers.read"));
+        }
         Page<ClientSummaryDTO> result = clientService.list(tenantId, page, size);
         return ResponseEntity.ok(result);
     }
@@ -42,6 +45,9 @@ public class ClientController {
         Long tenantId = extractTenantId(authentication);
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
+        }
+        if (!hasAnyAuthority(authentication, "customers.read")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "forbidden: customers.read"));
         }
         try {
             return ResponseEntity.ok(clientService.get(tenantId, clientId));
@@ -57,6 +63,9 @@ public class ClientController {
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
         }
+        if (!hasAnyAuthority(authentication, "customers.create")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "forbidden: customers.create"));
+        }
         try {
             return ResponseEntity.status(HttpStatus.CREATED).body(clientService.create(tenantId, request));
         } catch (IllegalArgumentException e) {
@@ -71,6 +80,9 @@ public class ClientController {
         Long tenantId = extractTenantId(authentication);
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
+        }
+        if (!hasAnyAuthority(authentication, "customers.update")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "forbidden: customers.update"));
         }
         try {
             return ResponseEntity.ok(clientService.update(tenantId, clientId, request));
@@ -88,6 +100,9 @@ public class ClientController {
         if (tenantId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Tenant não identificado"));
         }
+        if (!hasAnyAuthority(authentication, "customers.read")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "forbidden: customers.read"));
+        }
         Page<TransactionSummaryDTO> result = clientService.listTransactions(tenantId, clientId, page, size);
         return ResponseEntity.ok(result);
     }
@@ -101,5 +116,22 @@ public class ClientController {
             }
         }
         return null;
+    }
+
+    private boolean hasAnyAuthority(Authentication authentication, String... allowedAuthorities) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        for (var authority : authentication.getAuthorities()) {
+            if (authority == null || authority.getAuthority() == null) {
+                continue;
+            }
+            for (String allowed : allowedAuthorities) {
+                if (allowed.equalsIgnoreCase(authority.getAuthority())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

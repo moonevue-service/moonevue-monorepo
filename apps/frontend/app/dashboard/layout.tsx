@@ -12,26 +12,32 @@ import {
   MenuUnfoldOutlined,
   SettingOutlined,
   SwapOutlined,
+  TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '@/app/providers';
 import { ProtectedRoute } from '@/app/protected-route';
+import { canAccessClients, canManageEmployees } from '@/lib/authz';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-const navItems = [
+const baseNavItems = [
   { key: '/dashboard', label: 'Visão Geral', icon: <AppstoreOutlined /> },
   { key: '/dashboard/bank-accounts', label: 'Contas Bancárias', icon: <BankOutlined /> },
+  { key: '/dashboard/clients', label: 'Clientes', icon: <UserOutlined /> },
+  { key: '/dashboard/employees', label: 'Funcionários', icon: <TeamOutlined /> },
   { key: '/dashboard/transactions', label: 'Transações', icon: <SwapOutlined /> },
   { key: '/dashboard/settings', label: 'Configurações', icon: <SettingOutlined /> },
 ];
 
 function SidebarContent({
   pathname,
+  navItems,
   onNavigate,
 }: {
   pathname: string;
+  navItems: { key: string; label: string; icon: React.ReactNode }[];
   onNavigate: (key: string) => void;
 }) {
   const { token } = theme.useToken();
@@ -71,6 +77,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const navItems = baseNavItems.filter((item) => {
+    if (item.key === '/dashboard/clients') {
+      return canAccessClients(user?.roles, user?.permissions);
+    }
+
+    if (item.key === '/dashboard/employees') {
+      return canManageEmployees(user?.roles, user?.permissions);
+    }
+
+    return true;
+  });
 
   const handleLogout = async () => {
     try {
@@ -131,7 +149,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onBreakpoint={(broken) => setCollapsed(broken)}
           className="hidden md:block"
         >
-          <SidebarContent pathname={pathname} onNavigate={handleNavigate} />
+          <SidebarContent pathname={pathname} navItems={navItems} onNavigate={handleNavigate} />
         </Sider>
 
         {/* Mobile drawer */}
@@ -139,12 +157,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           placement="left"
-          width={220}
-          styles={{ body: { padding: 0 }, header: { display: 'none' } }}
+          size="default"
+          styles={{ body: { padding: 0, width: 220 }, header: { display: 'none' } }}
           className="md:hidden"
         >
           <Flex vertical style={{ height: '100%' }}>
-            <SidebarContent pathname={pathname} onNavigate={handleNavigate} />
+            <SidebarContent pathname={pathname} navItems={navItems} onNavigate={handleNavigate} />
           </Flex>
         </Drawer>
 

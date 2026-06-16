@@ -9,9 +9,12 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.Method;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -22,6 +25,8 @@ import java.util.Map;
  */
 @Component
 public class MutualTlsHttpService implements RequestSender {
+
+    private static final Logger log = LoggerFactory.getLogger(MutualTlsHttpService.class);
 
     private final InsecureCertificateHttpClientFactory clientFactory;
 
@@ -49,6 +54,15 @@ public class MutualTlsHttpService implements RequestSender {
             throw new IllegalArgumentException("BankConfiguration com certificado é obrigatório para mTLS.");
         }
 
+        long startedAt = System.nanoTime();
+        String host = safeHost(url);
+        if (log.isDebugEnabled()) {
+            log.debug("[mTLS] request start method={} host={} cfgId={}",
+                    method,
+                    host,
+                    cfg.getId());
+        }
+
         try (CloseableHttpClient httpClient = clientFactory.createFor(cfg)) {
             HttpUriRequestBase req = buildRequest(method, url, payload);
 
@@ -63,13 +77,40 @@ public class MutualTlsHttpService implements RequestSender {
                 String body = response.getEntity() != null
                         ? EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8)
                         : "";
+                if (log.isDebugEnabled()) {
+                    log.debug("[mTLS] request done method={} host={} cfgId={} status={} elapsedMs={}",
+                            method,
+                            host,
+                            cfg.getId(),
+                            status,
+                            elapsedMillis(startedAt));
+                }
                 if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) {
                     return body;
                 }
                 throw new RuntimeException(method + " (mTLS) falhou. HTTP " + status + " - " + body);
             }
         } catch (Exception e) {
+            log.error("[mTLS] request error method={} host={} cfgId={} elapsedMs={} error={}",
+                    method,
+                    host,
+                    cfg.getId(),
+                    elapsedMillis(startedAt),
+                    e.getMessage());
             throw new RuntimeException("Erro no HTTP mTLS: " + e.getMessage(), e);
+        }
+    }
+
+    private static long elapsedMillis(long startedAtNano) {
+        return (System.nanoTime() - startedAtNano) / 1_000_000;
+    }
+
+    private static String safeHost(String url) {
+        try {
+            URI uri = URI.create(url);
+            return uri.getHost() != null ? uri.getHost() : "unknown-host";
+        } catch (Exception ignored) {
+            return "invalid-url";
         }
     }
 

@@ -1,0 +1,606 @@
+openapi: 3.0.3
+info:
+  title: Moonevue APIs - Current + Evolution
+  version: 0.2.0
+  description: |
+    Contrato consolidado com:
+    1) endpoints atuais implementados (gateway/auth)
+    2) endpoints alvo para a evolução (v1) por fase
+servers:
+  - url: http://localhost:8080
+    description: Gateway
+  - url: http://localhost:8081
+    description: Auth
+security:
+  - CookieAuth: []
+tags:
+  - name: Current Clients
+  - name: Current Payments
+  - name: Current Checkout
+  - name: Current Webhooks
+  - name: Current Employees
+  - name: Evolution Customers
+  - name: Evolution Employees
+  - name: Evolution Transactions
+  - name: Evolution Checkout
+  - name: Evolution Webhooks
+x-roadmap-phases:
+  - phase: 1
+    title: Foundation
+    endpoints:
+      - /v1/transactions
+      - /v1/transactions/{transactionId}
+      - /v1/transactions/{transactionId}/charges/emit
+  - phase: 2
+    title: Customers and Employees
+    endpoints:
+      - /v1/customers
+      - /v1/customers/{customerId}
+      - /v1/employees
+      - /v1/employees/{employeeId}/status
+  - phase: 3
+    title: Full Checkout
+    endpoints:
+      - /v1/checkout/{token}/context
+      - /v1/checkout/{token}/identify
+      - /v1/checkout/{token}/pay
+      - /v1/checkout/{token}/status
+  - phase: 4
+    title: Operations
+    endpoints:
+      - /v1/internal/webhooks/reprocess/{eventId}
+paths:
+  /clients:
+    get:
+      tags: [Current Clients]
+      summary: List clients (current)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Clients page
+    post:
+      tags: [Current Clients]
+      summary: Create client (current)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpsertRequest'
+      responses:
+        '201':
+          description: Created
+
+  /clients/{clientId}:
+    get:
+      tags: [Current Clients]
+      summary: Get client by id (current)
+      parameters:
+        - $ref: '#/components/parameters/ClientIdLong'
+      responses:
+        '200':
+          description: Client
+    put:
+      tags: [Current Clients]
+      summary: Update client (current)
+      parameters:
+        - $ref: '#/components/parameters/ClientIdLong'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpsertRequest'
+      responses:
+        '200':
+          description: Updated
+
+  /clients/{clientId}/transactions:
+    get:
+      tags: [Current Clients, Current Payments]
+      summary: List transactions by client (current)
+      parameters:
+        - $ref: '#/components/parameters/ClientIdLong'
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Transactions page
+
+  /payments:
+    get:
+      tags: [Current Payments]
+      summary: List transactions (current)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Transactions page
+    post:
+      tags: [Current Payments]
+      summary: Create charge (current)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRequestDTO'
+      responses:
+        '200':
+          description: Charge created
+
+  /payments/checkout:
+    post:
+      tags: [Current Payments]
+      summary: Create checkout draft transaction (current)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutTransactionRequest'
+      responses:
+        '201':
+          description: Draft created
+
+  /payments/pix/immediate:
+    post:
+      tags: [Current Payments]
+      summary: Create PIX immediate charge (current)
+      responses:
+        '200':
+          description: Charge created
+
+  /payments/pix/due:
+    post:
+      tags: [Current Payments]
+      summary: Create PIX due charge (current)
+      responses:
+        '200':
+          description: Charge created
+
+  /payments/boleto:
+    post:
+      tags: [Current Payments]
+      summary: Create boleto charge (current)
+      responses:
+        '200':
+          description: Charge created
+
+  /payments/v1/transactions/{transactionId}/charges/emit:
+    post:
+      tags: [Current Payments, Evolution Transactions]
+      summary: Emit charge for an existing transaction (implemented incrementally)
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instrument:
+                  type: string
+                  enum: [PIX_IMMEDIATE, PIX_DUE, BOLETO]
+                pixKey:
+                  type: string
+      responses:
+        '200':
+          description: Charge emitted
+        '409':
+          description: Idempotency conflict
+
+  /payments/v1/transactions/{transactionId}/charges:
+    get:
+      tags: [Current Payments, Evolution Transactions]
+      summary: List charges for a transaction (implemented incrementally)
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+      responses:
+        '200':
+          description: Charges list
+
+  /payments/v1/transactions/{transactionId}/charges/retry:
+    post:
+      tags: [Current Payments, Evolution Transactions]
+      summary: Retry last failed/expired/canceled charge for a transaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pixKey:
+                  type: string
+      responses:
+        '200':
+          description: Charge retried
+        '409':
+          description: Idempotency conflict
+
+  /checkout/{token}:
+    get:
+      tags: [Current Checkout]
+      security: []
+      summary: Get checkout info (current)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenUuid'
+      responses:
+        '200':
+          description: Checkout info
+
+  /checkout/{token}/status:
+    get:
+      tags: [Current Checkout]
+      security: []
+      summary: Get checkout status (current)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenUuid'
+      responses:
+        '200':
+          description: Checkout status
+
+  /checkout/{token}/client-lookup:
+    get:
+      tags: [Current Checkout]
+      security: []
+      summary: Lookup client by document (current)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenUuid'
+        - in: query
+          name: document
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lookup result
+
+  /checkout/{token}/identify:
+    post:
+      tags: [Current Checkout]
+      security: []
+      summary: Identify checkout payer (current)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenUuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutIdentifyRequest'
+      responses:
+        '200':
+          description: Identified
+
+  /checkout/{token}/pay:
+    post:
+      tags: [Current Checkout]
+      security: []
+      summary: Pay checkout transaction (current)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenUuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutPayRequest'
+      responses:
+        '200':
+          description: Payment requested
+
+  /webhooks/banks/{provider}/events:
+    post:
+      tags: [Current Webhooks]
+      security: []
+      summary: Receive bank webhook (current)
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema: { type: string }
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+          application/json:
+            schema:
+              type: object
+      responses:
+        '204':
+          description: Accepted
+
+  /auth/employees:
+    post:
+      tags: [Current Employees]
+      summary: Create employee user (current)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmployeeRegisterRequest'
+      responses:
+        '201':
+          description: Employee created
+
+  /v1/customers:
+    get:
+      tags: [Evolution Customers]
+      summary: List customers (target)
+      responses:
+        '200':
+          description: Customers list
+    post:
+      tags: [Evolution Customers]
+      summary: Create customer (target)
+      responses:
+        '201':
+          description: Customer created
+
+  /v1/customers/{customerId}:
+    get:
+      tags: [Evolution Customers]
+      summary: Get customer details (target)
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdLong'
+      responses:
+        '200':
+          description: Customer
+    patch:
+      tags: [Evolution Customers]
+      summary: Update customer (target)
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdLong'
+      responses:
+        '200':
+          description: Updated
+
+  /v1/employees:
+    get:
+      tags: [Evolution Employees]
+      summary: List employees (target)
+      responses:
+        '200':
+          description: Employees
+    post:
+      tags: [Evolution Employees]
+      summary: Add employee (target)
+      responses:
+        '201':
+          description: Employee created
+
+  /v1/employees/{employeeId}/status:
+    patch:
+      tags: [Evolution Employees]
+      summary: Activate/deactivate employee (target)
+      parameters:
+        - $ref: '#/components/parameters/EmployeeIdLong'
+      responses:
+        '200':
+          description: Updated
+
+  /v1/transactions:
+    get:
+      tags: [Evolution Transactions]
+      summary: List internal transactions (target)
+      responses:
+        '200':
+          description: Transactions
+    post:
+      tags: [Evolution Transactions]
+      summary: Create internal transaction (target)
+      responses:
+        '201':
+          description: Created
+
+  /v1/transactions/{transactionId}:
+    get:
+      tags: [Evolution Transactions]
+      summary: Get transaction details (target)
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+      responses:
+        '200':
+          description: Transaction
+    patch:
+      tags: [Evolution Transactions]
+      summary: Update transaction (target)
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+      responses:
+        '200':
+          description: Updated
+
+  /v1/transactions/{transactionId}/charges/emit:
+    post:
+      tags: [Evolution Transactions]
+      summary: Emit charge in provider (target)
+      parameters:
+        - $ref: '#/components/parameters/TransactionIdLong'
+      responses:
+        '200':
+          description: Emitted
+
+  /v1/checkout/{token}/context:
+    get:
+      tags: [Evolution Checkout]
+      security: []
+      summary: Get checkout context (target)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenText'
+      responses:
+        '200':
+          description: Context
+
+  /v1/checkout/{token}/identify:
+    post:
+      tags: [Evolution Checkout]
+      security: []
+      summary: Identify/create customer in checkout (target)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenText'
+      responses:
+        '200':
+          description: Identified
+
+  /v1/checkout/{token}/pay:
+    post:
+      tags: [Evolution Checkout]
+      security: []
+      summary: Execute checkout payment (target)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenText'
+      responses:
+        '200':
+          description: Initiated
+
+  /v1/checkout/{token}/status:
+    get:
+      tags: [Evolution Checkout]
+      security: []
+      summary: Poll checkout status (target)
+      parameters:
+        - $ref: '#/components/parameters/CheckoutTokenText'
+      responses:
+        '200':
+          description: Status
+
+  /v1/internal/webhooks/reprocess/{eventId}:
+    post:
+      tags: [Evolution Webhooks]
+      summary: Reprocess webhook event (target)
+      parameters:
+        - in: path
+          name: eventId
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reprocessed
+
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
+  parameters:
+    ClientIdLong:
+      in: path
+      name: clientId
+      required: true
+      schema: { type: integer, format: int64 }
+    CustomerIdLong:
+      in: path
+      name: customerId
+      required: true
+      schema: { type: integer, format: int64 }
+    EmployeeIdLong:
+      in: path
+      name: employeeId
+      required: true
+      schema: { type: integer, format: int64 }
+    TransactionIdLong:
+      in: path
+      name: transactionId
+      required: true
+      schema: { type: integer, format: int64 }
+    CheckoutTokenUuid:
+      in: path
+      name: token
+      required: true
+      schema: { type: string, format: uuid }
+    CheckoutTokenText:
+      in: path
+      name: token
+      required: true
+      schema: { type: string }
+  schemas:
+    ClientUpsertRequest:
+      type: object
+      required: [name, cpfCnpj, email]
+      properties:
+        name: { type: string }
+        cpfCnpj: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+    EmployeeRegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+    CreateCheckoutTransactionRequest:
+      type: object
+      required: [bankConfigurationId, amount, description, instrument]
+      properties:
+        bankConfigurationId: { type: integer, format: int64 }
+        amount: { type: number, format: double, minimum: 0.01 }
+        description: { type: string }
+        instrument: { type: string }
+        clientId: { type: integer, format: int64, nullable: true }
+        checkoutAccessMode:
+          type: string
+          enum: [PUBLIC, AUTHENTICATED_CLIENT]
+        pixKey: { type: string, nullable: true }
+        expiresInHours: { type: integer, nullable: true }
+    CheckoutIdentifyRequest:
+      type: object
+      required: [document]
+      properties:
+        document: { type: string }
+    CheckoutPayRequest:
+      type: object
+      required: [instrument, payerName, payerDocument]
+      properties:
+        instrument: { type: string }
+        payerName: { type: string }
+        payerDocument: { type: string }
+        payerEmail: { type: string, format: email, nullable: true }
+        payerPhone: { type: string, nullable: true }
+        pixKey: { type: string, nullable: true }
+    ChargeRequestDTO:
+      type: object
+      properties:
+        bank: { type: string }
+        bankConfigurationId: { type: integer, format: int64 }
+        payment:
+          type: object
+          properties:
+            instrument:
+              type: string
+              enum: [PIX_IMMEDIATE, PIX_DUE, BOLETO]

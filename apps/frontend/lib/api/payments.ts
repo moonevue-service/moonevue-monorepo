@@ -120,6 +120,17 @@ export interface ChargeResponseDTO {
   pdfLink?: string;
 }
 
+export interface CreateCheckoutTransactionRequest {
+  bankConfigurationId: number;
+  amount: number;
+  description: string;
+  instrument: PaymentPayload['instrument'];
+  clientId?: number;
+  checkoutAccessMode?: 'PUBLIC' | 'CLIENT_DOCUMENT' | 'CLIENT_LOGIN';
+  pixKey?: string;
+  expiresInHours?: number;
+}
+
 export interface TransactionSummary {
   id: number;
   amount: string;
@@ -127,6 +138,13 @@ export interface TransactionSummary {
   type: string;
   description?: string;
   externalReference?: string;
+  checkoutToken?: string;
+  checkoutUrl?: string;
+  checkoutExpiresAt?: string;
+  checkoutInstrument?: string;
+  clientId?: number;
+  clientName?: string;
+  checkoutAccessMode?: string;
   bank?: string;
   createdAt: string;
 }
@@ -148,21 +166,27 @@ export const PaymentApi = {
   createPayment: (data: ChargeRequestDTO) =>
     ApiClient.post<ChargeResponseDTO>('/payments', data),
 
+  createCheckoutDraft: (data: CreateCheckoutTransactionRequest) =>
+    ApiClient.post<TransactionSummary>('/payments/checkout', data),
+
   createPixImmediate: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
+    clientId?: number;
     payment: PixImmediatePayment;
   }) => ApiClient.post<ChargeResponseDTO>('/payments/pix/immediate', data),
 
   createPixDue: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
+    clientId?: number;
     payment: PixDuePayment;
   }) => ApiClient.post<ChargeResponseDTO>('/payments/pix/due', data),
 
   createBoleto: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
+    clientId?: number;
     payment: BoletoPayment;
   }) => ApiClient.post<ChargeResponseDTO>('/payments/boleto', data),
 };

@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -46,6 +47,28 @@ class PaymentControllerTest {
     @Test
     void createBoleto_deveria_retornar_401_sem_autenticacao() throws Exception {
         mockMvc.perform(post("/payments/boleto")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void emitChargeForTransaction_deveria_retornar_401_sem_autenticacao() throws Exception {
+        mockMvc.perform(post("/payments/v1/transactions/1/charges/emit")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listChargesByTransaction_deveria_retornar_401_sem_autenticacao() throws Exception {
+        mockMvc.perform(get("/payments/v1/transactions/1/charges"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void retryChargeForTransaction_deveria_retornar_401_sem_autenticacao() throws Exception {
+        mockMvc.perform(post("/payments/v1/transactions/1/charges/retry")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
                 .andExpect(status().isUnauthorized());

@@ -6,6 +6,7 @@ import com.moonevue.gateway.dto.CheckoutIdentifyRequest;
 import com.moonevue.gateway.dto.CheckoutPayRequest;
 import jakarta.validation.Valid;
 import com.moonevue.gateway.service.CheckoutService;
+import com.moonevue.gateway.service.IdempotencyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -22,9 +23,12 @@ public class CheckoutController {
     private static final Logger log = LoggerFactory.getLogger(CheckoutController.class);
 
     private final CheckoutService checkoutService;
+    private final IdempotencyService idempotencyService;
 
-    public CheckoutController(CheckoutService checkoutService) {
+    public CheckoutController(CheckoutService checkoutService,
+                              IdempotencyService idempotencyService) {
         this.checkoutService = checkoutService;
+        this.idempotencyService = idempotencyService;
     }
 
     @GetMapping("/{token}")
@@ -92,9 +96,29 @@ public class CheckoutController {
     }
 
     @PostMapping("/{token}/pay")
-    public ResponseEntity<?> pay(@PathVariable("token") UUID token, @RequestBody CheckoutPayRequest request) {
+    public ResponseEntity<?> pay(@PathVariable("token") UUID token,
+                                 @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+                                 @RequestBody CheckoutPayRequest request) {
+        String scope = "checkout_pay_" + token;
+        String requestHash = idempotencyService.hashRequest(request == null ? Map.of() : request);
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            var existing = idempotencyService.findByScopeAndKey(scope, idempotencyKey);
+            if (existing.isPresent() && existing.get().responseStatus() != null && existing.get().responseBody() != null) {
+                if (!existing.get().requestHash().equals(requestHash)) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(Map.of("error", "Idempotency-Key reutilizada com payload diferente"));
+                }
+                CheckoutInfoDTO cached = idempotencyService.parseResponseBody(existing.get().responseBody(), CheckoutInfoDTO.class);
+                return ResponseEntity.status(existing.get().responseStatus()).body(cached);
+            }
+            idempotencyService.reserve(scope, idempotencyKey, requestHash);
+        }
+
         try {
             CheckoutInfoDTO result = checkoutService.pay(token, request);
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.storeResponse(scope, idempotencyKey, HttpStatus.OK.value(), result);
+            }
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
