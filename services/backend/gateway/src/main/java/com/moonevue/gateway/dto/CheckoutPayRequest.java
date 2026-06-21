@@ -1,20 +1,24 @@
 package com.moonevue.gateway.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 /**
  * Payload enviado pelo cliente final ao confirmar o pagamento no checkout.
+ *
+ * <p>Os dados do pagador ({@code payerName}/{@code payerDocument}) NÃO são mais
+ * obrigatórios de forma fixa: a exigência depende do provedor e do tipo de
+ * cobrança (ver {@code DebtorRequirementPolicy}). Ex.: PIX imediato dispensa o
+ * devedor, enquanto PIX com vencimento e boleto o exigem.
  */
 public record CheckoutPayRequest(
 
         @NotBlank(message = "instrument é obrigatório")
         String instrument,
 
-        @NotBlank(message = "payerName é obrigatório")
+        /** Nome do pagador. Obrigatório conforme a política do instrumento. */
         String payerName,
 
-        @NotBlank(message = "payerDocument é obrigatório (CPF ou CNPJ)")
+        /** CPF ou CNPJ do pagador. Obrigatório conforme a política do instrumento. */
         String payerDocument,
 
         /** E-mail do pagador (opcional mas recomendado) */

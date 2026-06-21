@@ -55,7 +55,7 @@ public class DefaultRequestSender implements RequestSender {
                         ? EntityUtils.toString(resp.getEntity(), StandardCharsets.UTF_8)
                         : "";
                 if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) return body;
-                throw new RuntimeException(method + " falhou. HTTP " + status + " - " + body);
+                throw new HttpRequestException(status, body, method + " falhou. HTTP " + status + " - " + body);
             }
         }
     }

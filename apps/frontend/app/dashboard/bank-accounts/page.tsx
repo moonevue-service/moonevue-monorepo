@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   App,
@@ -44,6 +44,8 @@ export default function BankAccountsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   useEffect(() => {
     if (user?.tenantId) loadAccounts();
@@ -121,6 +123,21 @@ export default function BankAccountsPage() {
     }
   };
 
+  const filteredAccounts = useMemo(() => {
+    const normalized = searchText.trim().toLowerCase();
+    return accounts.filter((a) => {
+      const matchesText =
+        !normalized ||
+        a.name.toLowerCase().includes(normalized) ||
+        a.bank.toLowerCase().includes(normalized) ||
+        a.cdAgency.toLowerCase().includes(normalized) ||
+        a.cdAccount.toLowerCase().includes(normalized);
+      const matchesStatus =
+        statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? a.active : !a.active);
+      return matchesText && matchesStatus;
+    });
+  }, [accounts, searchText, statusFilter]);
+
   const columns: ColumnsType<BankAccountResponse> = [
     { title: 'Nome', dataIndex: 'name', key: 'name' },
     { title: 'Banco', dataIndex: 'bank', key: 'bank', width: 80 },
@@ -153,7 +170,7 @@ export default function BankAccountsPage() {
       width: 130,
       render: (_, record) => (
         <Space>
-          <Tooltip title={canManageConfig ? 'Configurações EFI' : 'Somente administradores'}>
+          <Tooltip title={canManageConfig ? 'Configurações do provedor' : 'Somente administradores'}>
             <Button
               type="text"
               size="small"
@@ -199,9 +216,30 @@ export default function BankAccountsPage() {
 
       <Table
         columns={columns}
-        dataSource={accounts}
+        dataSource={filteredAccounts}
         rowKey="id"
         loading={loading}
+        title={() => (
+          <Space wrap>
+            <Input.Search
+              allowClear
+              placeholder="Buscar por nome, banco ou agência"
+              style={{ width: 320 }}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+            <Select
+              value={statusFilter}
+              style={{ width: 180 }}
+              onChange={(value) => setStatusFilter(value)}
+              options={[
+                { label: 'Todos os status', value: 'ALL' },
+                { label: 'Ativa', value: 'ACTIVE' },
+                { label: 'Inativa', value: 'INACTIVE' },
+              ]}
+            />
+          </Space>
+        )}
         pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
         locale={{ emptyText: 'Nenhuma conta bancária configurada. Clique em "Nova Conta" para começar.' }}
         scroll={{ x: 600 }}
@@ -227,7 +265,12 @@ export default function BankAccountsPage() {
           </Form.Item>
 
           <Form.Item label="Banco" name="bank" rules={[{ required: true }]}>
-            <Select options={[{ value: 'EFI', label: 'EFI (Efí Pay)' }]} />
+            <Select
+              options={[
+                { value: 'EFI', label: 'EFI (Efí Pay)' },
+                { value: 'ASAAS', label: 'ASAAS' },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item label="Tipo de Conta" name="accountType" rules={[{ required: true }]}>

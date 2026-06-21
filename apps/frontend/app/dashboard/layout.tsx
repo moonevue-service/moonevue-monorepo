@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Avatar, Button, Drawer, Dropdown, Flex, Layout, Menu, theme, Typography } from 'antd';
+import { Avatar, Button, Dropdown, Flex, Layout, Menu, Spin, theme, Typography } from 'antd';
 import {
   AppstoreOutlined,
   BankOutlined,
+  LineChartOutlined,
+  LoadingOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -18,12 +20,14 @@ import {
 import { useAuth } from '@/app/providers';
 import { ProtectedRoute } from '@/app/protected-route';
 import { canAccessClients, canManageEmployees } from '@/lib/authz';
+import { dmSerifDisplay } from '@/app/ui/fonts';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 const baseNavItems = [
   { key: '/dashboard', label: 'Visão Geral', icon: <AppstoreOutlined /> },
+  { key: '/dashboard/analytics', label: 'Analytics', icon: <LineChartOutlined /> },
   { key: '/dashboard/bank-accounts', label: 'Contas Bancárias', icon: <BankOutlined /> },
   { key: '/dashboard/clients', label: 'Clientes', icon: <UserOutlined /> },
   { key: '/dashboard/employees', label: 'Funcionários', icon: <TeamOutlined /> },
@@ -32,11 +36,11 @@ const baseNavItems = [
 ];
 
 function SidebarContent({
-  pathname,
+  selectedKey,
   navItems,
   onNavigate,
 }: {
-  pathname: string;
+  selectedKey: string;
   navItems: { key: string; label: string; icon: React.ReactNode }[];
   onNavigate: (key: string) => void;
 }) {
@@ -54,14 +58,15 @@ function SidebarContent({
       >
         <Link
           href="/dashboard"
-          style={{ color: token.colorPrimary, fontWeight: 700, fontSize: 16, textDecoration: 'none' }}
+          className={dmSerifDisplay.className}
+          style={{ color: token.colorPrimary, fontSize: 22, textDecoration: 'none' }}
         >
-          Moonevue
+          MOONEVUE
         </Link>
       </Flex>
       <Menu
         mode="inline"
-        selectedKeys={[pathname]}
+        selectedKeys={[selectedKey]}
         items={navItems}
         style={{ border: 'none', marginTop: 8, flex: 1 }}
         onClick={({ key }) => onNavigate(key)}
@@ -76,7 +81,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, logout } = useAuth();
   const { token } = theme.useToken();
   const [collapsed, setCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [selectedKey, setSelectedKey] = useState(pathname);
+
+  useEffect(() => {
+    setSelectedKey(pathname);
+  }, [pathname]);
 
   const navItems = baseNavItems.filter((item) => {
     if (item.key === '/dashboard/clients') {
@@ -99,8 +109,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const handleNavigate = (key: string) => {
-    router.push(key);
-    setDrawerOpen(false);
+    if (key === pathname) return;
+    setSelectedKey(key);
+    startTransition(() => router.push(key));
   };
 
   const userMenu = {
@@ -147,40 +158,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           breakpoint="md"
           collapsedWidth={0}
           onBreakpoint={(broken) => setCollapsed(broken)}
-          className="hidden md:block"
         >
-          <SidebarContent pathname={pathname} navItems={navItems} onNavigate={handleNavigate} />
+          <SidebarContent selectedKey={selectedKey} navItems={navItems} onNavigate={handleNavigate} />
         </Sider>
-
-        {/* Mobile drawer */}
-        <Drawer
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          placement="left"
-          size="default"
-          styles={{ body: { padding: 0, width: 220 }, header: { display: 'none' } }}
-          className="md:hidden"
-        >
-          <Flex vertical style={{ height: '100%' }}>
-            <SidebarContent pathname={pathname} navItems={navItems} onNavigate={handleNavigate} />
-          </Flex>
-        </Drawer>
 
         <Layout>
           <Header style={headerStyle}>
-            {/* Desktop: collapse toggle */}
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
-              className="hidden md:flex"
-            />
-            {/* Mobile: drawer toggle */}
-            <Button
-              type="text"
-              icon={<MenuUnfoldOutlined />}
-              onClick={() => setDrawerOpen(true)}
-              className="flex md:hidden"
             />
 
             <div style={{ flex: 1 }} />
@@ -210,7 +197,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               minHeight: 'calc(100vh - 64px)',
             }}
           >
-            <div style={{ maxWidth: 1200, margin: '0 auto' }}>{children}</div>
+            <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+              {isPending ? (
+                <Flex
+                  vertical
+                  align="center"
+                  justify="center"
+                  gap={16}
+                  style={{ minHeight: 'calc(100vh - 160px)' }}
+                >
+                  <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />} />
+                  <Text type="secondary">Carregando…</Text>
+                </Flex>
+              ) : (
+                children
+              )}
+            </div>
           </Content>
         </Layout>
       </Layout>

@@ -1,7 +1,8 @@
 import { ApiClient } from './client';
 
 export enum BankType {
-  EFI = 'EFI'
+  EFI = 'EFI',
+  ASAAS = 'ASAAS',
 }
 
 export enum AccountType {

@@ -46,6 +46,11 @@ moonevue:
 banks:
   efi:
     production: false
+  asaas:
+    api-key: ${ASAAS_API_KEY:}
+    sandbox-base-url: https://api-sandbox.asaas.com
+    production-base-url: https://api.asaas.com
+    user-agent: Moonevue/1.0
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}

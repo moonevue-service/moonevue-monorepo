@@ -40,6 +40,7 @@ import {
   BankAccountResponse,
   BankConfigurationRequest,
   BankConfigurationResponse,
+  BankType,
   CertificateUploadResponse,
   Environment,
   FinanceApi,
@@ -117,6 +118,42 @@ function extraConfigToFormValues(
   };
 }
 
+// ASAAS extraConfig shape used in the form
+interface AsaasFormValues {
+  environment: Environment;
+  webhookUrl?: string;
+  isActive: boolean;
+  asaas_access_token: string;
+  asaas_customer?: string;
+  asaas_baseUrl?: string;
+}
+
+function asaasFormValuesToExtraConfig(v: AsaasFormValues): Record<string, any> {
+  const asaas: Record<string, string> = {
+    access_token: v.asaas_access_token,
+  };
+  if (v.asaas_customer) asaas.customer = v.asaas_customer;
+  if (v.asaas_baseUrl) asaas.baseUrl = v.asaas_baseUrl;
+  return { asaas };
+}
+
+function asaasExtraConfigToFormValues(
+  cfg: BankConfigurationResponse
+): Partial<AsaasFormValues> {
+  const asaas = (cfg.extraConfig?.asaas ?? {}) as Record<string, string>;
+  return {
+    environment: cfg.environment,
+    webhookUrl: cfg.webhookUrl ?? '',
+    isActive: cfg.isActive ?? true,
+    asaas_access_token: asaas.access_token ?? '',
+    asaas_customer: asaas.customer ?? '',
+    asaas_baseUrl: asaas.baseUrl ?? '',
+  };
+}
+
+// Union of all supported bank form shapes handled by the ConfigModal.
+type BankConfigFormValues = EfiFormValues & AsaasFormValues;
+
 // ── Certificate upload modal ──────────────────────────────────────────────────
 
 function CertUploadModal({
@@ -171,7 +208,7 @@ function CertUploadModal({
     <Modal
       title={
         <Space>
-          <SafetyCertificateOutlined style={{ color: '#1677ff' }} />
+          <SafetyCertificateOutlined style={{ color: '#0a0a0a' }} />
           Enviar Certificado mTLS
         </Space>
       }
@@ -238,6 +275,7 @@ function CertUploadModal({
 
 function ConfigModal({
   open,
+  bank,
   editing,
   existingEnvironments,
   tenantId,
@@ -246,6 +284,7 @@ function ConfigModal({
   onSuccess,
 }: {
   open: boolean;
+  bank: BankType;
   editing: BankConfigurationResponse | null;
   existingEnvironments: Environment[];
   tenantId: number;
@@ -254,24 +293,31 @@ function ConfigModal({
   onSuccess: (cfg: BankConfigurationResponse) => void;
 }) {
   const { message } = App.useApp();
-  const [form] = Form.useForm<EfiFormValues>();
+  const [form] = Form.useForm<BankConfigFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const isAsaas = bank === BankType.ASAAS;
 
   useEffect(() => {
     if (open) {
       if (editing) {
-        form.setFieldsValue(extraConfigToFormValues(editing));
+        form.setFieldsValue(
+          isAsaas
+            ? asaasExtraConfigToFormValues(editing)
+            : extraConfigToFormValues(editing)
+        );
       } else {
         form.resetFields();
         form.setFieldsValue({ isActive: true, environment: Environment.SANDBOX });
       }
     }
-  }, [open, editing, form]);
+  }, [open, editing, form, isAsaas]);
 
-  const handleSubmit = async (values: EfiFormValues) => {
+  const handleSubmit = async (values: BankConfigFormValues) => {
     setSubmitting(true);
     try {
-      const extraConfig = formValuesToExtraConfig(values);
+      const extraConfig = isAsaas
+        ? asaasFormValuesToExtraConfig(values)
+        : formValuesToExtraConfig(values);
       if (editing) {
         const res = await FinanceApi.updateBankConfiguration(
           tenantId,
@@ -308,7 +354,11 @@ function ConfigModal({
 
   return (
     <Modal
-      title={editing ? 'Editar Configuração EFI' : 'Nova Configuração EFI'}
+      title={
+        editing
+          ? `Editar Configuração ${isAsaas ? 'ASAAS' : 'EFI'}`
+          : `Nova Configuração ${isAsaas ? 'ASAAS' : 'EFI'}`
+      }
       open={open}
       width={640}
       onCancel={() => !submitting && onClose()}
@@ -337,67 +387,105 @@ function ConfigModal({
           </Col>
         </Row>
 
-        <Form.Item name="webhookUrl" label="URL de Webhook (PIX recebido)">
-          <Input placeholder="https://meu-site.com/webhooks/pix" />
+        <Form.Item name="webhookUrl" label="URL de Webhook (pagamento recebido)">
+          <Input placeholder="https://meu-site.com/webhooks/pagamento" />
         </Form.Item>
 
-        <Divider  style={{ fontSize: 13 }}>
-          PIX — Credenciais
-        </Divider>
+        {isAsaas ? (
+          <>
+            <Divider style={{ fontSize: 13 }}>ASAAS — Credenciais</Divider>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              A API Key é enviada no header <strong>access_token</strong> das requisições. Caso não
+              seja informada aqui, a aplicação usará a variável de ambiente{' '}
+              <strong>ASAAS_API_KEY</strong>.
+            </Text>
 
-        <Row gutter={16}>
-          <Col span={12}>
             <Form.Item
-              name="pix_client_id"
-              label="Client ID (PIX)"
+              name="asaas_access_token"
+              label="API Key (access_token)"
               rules={[{ required: true, message: 'Obrigatório' }]}
             >
-              <Input />
+              <Input.Password placeholder="$aact_..." />
             </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="pix_client_secret"
-              label="Client Secret (PIX)"
-              rules={[{ required: true, message: 'Obrigatório' }]}
-            >
-              <Input.Password />
-            </Form.Item>
-          </Col>
-        </Row>
 
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="pix_pixKey" label="Chave PIX padrão">
-              <Input placeholder="CPF, CNPJ, e-mail, telefone ou aleatória" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="pix_scope" label="Scope (opcional)">
-              <Input placeholder="cob.write cob.read..." />
-            </Form.Item>
-          </Col>
-        </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="asaas_customer"
+                  label="Customer padrão (opcional)"
+                  tooltip="Identificador do cliente ASAAS (cus_...) usado quando a cobrança não informar um."
+                >
+                  <Input placeholder="cus_000000000000" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="asaas_baseUrl"
+                  label="Base URL (opcional)"
+                  tooltip="Sobrescreve a URL padrão (sandbox/produção)."
+                >
+                  <Input placeholder="https://api-sandbox.asaas.com" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </>
+        ) : (
+          <>
+            <Divider style={{ fontSize: 13 }}>PIX — Credenciais</Divider>
 
-        <Divider  style={{ fontSize: 13 }}>
-          Boleto (Cobranças) — Credenciais
-        </Divider>
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
-          Deixe em branco para usar as mesmas credenciais do PIX.
-        </Text>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="pix_client_id"
+                  label="Client ID (PIX)"
+                  rules={[{ required: true, message: 'Obrigatório' }]}
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="pix_client_secret"
+                  label="Client Secret (PIX)"
+                  rules={[{ required: true, message: 'Obrigatório' }]}
+                >
+                  <Input.Password />
+                </Form.Item>
+              </Col>
+            </Row>
 
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item name="charges_client_id" label="Client ID (Boleto)">
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="charges_client_secret" label="Client Secret (Boleto)">
-              <Input.Password />
-            </Form.Item>
-          </Col>
-        </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="pix_pixKey" label="Chave PIX padrão">
+                  <Input placeholder="CPF, CNPJ, e-mail, telefone ou aleatória" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="pix_scope" label="Scope (opcional)">
+                  <Input placeholder="cob.write cob.read..." />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Divider style={{ fontSize: 13 }}>Boleto (Cobranças) — Credenciais</Divider>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+              Deixe em branco para usar as mesmas credenciais do PIX.
+            </Text>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="charges_client_id" label="Client ID (Boleto)">
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="charges_client_secret" label="Client Secret (Boleto)">
+                  <Input.Password />
+                </Form.Item>
+              </Col>
+            </Row>
+          </>
+        )}
       </Form>
     </Modal>
   );
@@ -487,6 +575,9 @@ export default function BankConfigPage() {
 
   const existingEnvironments = configs.map((c) => c.environment);
   const canAddMore = existingEnvironments.length < 2;
+  const bank = (account?.bank as BankType) ?? BankType.EFI;
+  const isAsaas = bank === BankType.ASAAS;
+  const bankLabel = isAsaas ? 'ASAAS' : 'EFI';
 
   if (loading) {
     return (
@@ -523,7 +614,7 @@ export default function BankConfigPage() {
           { title: <Link href="/dashboard">Dashboard</Link> },
           { title: <Link href="/dashboard/bank-accounts">Contas Bancárias</Link> },
           { title: account?.name ?? `Conta #${bankAccountId}` },
-          { title: 'Configurações EFI' },
+          { title: `Configurações ${bankLabel}` },
         ]}
       />
 
@@ -531,10 +622,12 @@ export default function BankConfigPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <Title level={3} style={{ marginBottom: 4 }}>
-            Configurações EFI — {account?.name ?? `Conta #${bankAccountId}`}
+            Configurações {bankLabel} — {account?.name ?? `Conta #${bankAccountId}`}
           </Title>
           <Text type="secondary">
-            Gerencie credenciais, ambiente e certificado mTLS para integração com a Efí Pay.
+            {isAsaas
+              ? 'Gerencie a API Key (access_token), ambiente e webhook para integração com a ASAAS.'
+              : 'Gerencie credenciais, ambiente e certificado mTLS para integração com a Efí Pay.'}
           </Text>
         </div>
         <Space>
@@ -591,42 +684,76 @@ export default function BankConfigPage() {
                       {cfg.webhookUrl || <Text type="secondary">não configurado</Text>}
                     </Text>
                   </Descriptions.Item>
-                  <Descriptions.Item label="PIX Client ID">
-                    <Text style={{ fontSize: 12 }}>
-                      {(cfg.extraConfig?.pix as any)?.client_id
-                        ? String((cfg.extraConfig.pix as any).client_id).slice(0, 8) + '••••••••'
-                        : <Text type="secondary">não configurado</Text>}
-                    </Text>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Chave PIX">
-                    <Text style={{ fontSize: 12 }}>
-                      {(cfg.extraConfig?.pix as any)?.pixKey || (
-                        <Text type="secondary">não configurada</Text>
-                      )}
-                    </Text>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Certificado mTLS">
-                    {cfg.certificatePathMasked ? (
-                      <Tag icon={<CheckCircleOutlined />} color="success" style={{ fontSize: 11 }}>
-                        {cfg.certificatePathMasked}
-                      </Tag>
-                    ) : (
-                      <Tag color="warning" style={{ fontSize: 11 }}>
-                        Nenhum certificado
-                      </Tag>
-                    )}
-                  </Descriptions.Item>
+                  {isAsaas ? (
+                    <>
+                      <Descriptions.Item label="API Key">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.asaas as any)?.access_token ? (
+                            '••••••••' +
+                            String((cfg.extraConfig.asaas as any).access_token).slice(-4)
+                          ) : (
+                            <Text type="secondary">usa ASAAS_API_KEY (ambiente)</Text>
+                          )}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Customer padrão">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.asaas as any)?.customer || (
+                            <Text type="secondary">não configurado</Text>
+                          )}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Base URL">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.asaas as any)?.baseUrl || (
+                            <Text type="secondary">padrão (sandbox/produção)</Text>
+                          )}
+                        </Text>
+                      </Descriptions.Item>
+                    </>
+                  ) : (
+                    <>
+                      <Descriptions.Item label="PIX Client ID">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.pix as any)?.client_id
+                            ? String((cfg.extraConfig.pix as any).client_id).slice(0, 8) + '••••••••'
+                            : <Text type="secondary">não configurado</Text>}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Chave PIX">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.pix as any)?.pixKey || (
+                            <Text type="secondary">não configurada</Text>
+                          )}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Certificado mTLS">
+                        {cfg.certificatePathMasked ? (
+                          <Tag icon={<CheckCircleOutlined />} color="success" style={{ fontSize: 11 }}>
+                            {cfg.certificatePathMasked}
+                          </Tag>
+                        ) : (
+                          <Tag color="warning" style={{ fontSize: 11 }}>
+                            Nenhum certificado
+                          </Tag>
+                        )}
+                      </Descriptions.Item>
+                    </>
+                  )}
                 </Descriptions>
 
-                <Divider style={{ margin: '12px 0' }} />
-
-                <Button
-                  block
-                  icon={<SafetyCertificateOutlined />}
-                  onClick={() => openCertUpload(cfg)}
-                >
-                  {cfg.certificatePathMasked ? 'Substituir Certificado' : 'Enviar Certificado'}
-                </Button>
+                {!isAsaas && (
+                  <>
+                    <Divider style={{ margin: '12px 0' }} />
+                    <Button
+                      block
+                      icon={<SafetyCertificateOutlined />}
+                      onClick={() => openCertUpload(cfg)}
+                    >
+                      {cfg.certificatePathMasked ? 'Substituir Certificado' : 'Enviar Certificado'}
+                    </Button>
+                  </>
+                )}
               </Card>
             </Col>
           ))}
@@ -636,6 +763,7 @@ export default function BankConfigPage() {
       {/* Modals */}
       <ConfigModal
         open={configModalOpen}
+        bank={bank}
         editing={editingConfig}
         existingEnvironments={existingEnvironments}
         tenantId={user?.tenantId || 0}

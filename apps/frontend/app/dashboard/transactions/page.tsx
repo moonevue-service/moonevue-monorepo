@@ -1,22 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   App,
   Button,
+  Col,
   Divider,
   Form,
   Input,
   InputNumber,
   Modal,
+  Row,
   Select,
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
-import { CopyOutlined, PlusOutlined } from '@ant-design/icons';
+import { CopyOutlined, ExportOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuth } from '@/app/providers';
 import {
@@ -62,6 +65,8 @@ type FormValues = {
   bankConfigurationId: number;
   clientId?: number;
   instrument: PaymentInstrument;
+  // ASAAS
+  asaasCustomer?: string;
   // PIX Imediato
   pixAmount?: number;
   pixDescription?: string;
@@ -120,6 +125,22 @@ function descriptionToInstrument(description?: string): PaymentInstrument {
   return 'PIX_IMMEDIATE';
 }
 
+/**
+ * Resolve o token do checkout a partir do token direto ou de uma URL que contenha
+ * "/checkout/<token>". A URL absoluta retornada pelo backend pode apontar para outro
+ * host (ex.: domínio de produção) e não abrir no ambiente atual; por isso preferimos
+ * sempre navegar para a rota interna do próprio frontend.
+ */
+function resolveCheckoutToken(token?: string, url?: string): string | undefined {
+  if (token && token.trim()) return token.trim();
+  if (url && url.includes('/checkout/')) {
+    const tail = url.split('/checkout/')[1] ?? '';
+    const parsed = tail.split(/[/?#]/)[0];
+    if (parsed) return parsed;
+  }
+  return undefined;
+}
+
 export default function TransactionsPage() {
   const { user } = useAuth();
   const { message } = App.useApp();
@@ -128,11 +149,15 @@ export default function TransactionsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [instrument, setInstrument] = useState<PaymentInstrument>('PIX_IMMEDIATE');
+  const [selectedBank, setSelectedBank] = useState<PaymentBankType | undefined>(undefined);
   const [resultModal, setResultModal] = useState<PaymentResultModal | null>(null);
   const [loadingTx, setLoadingTx] = useState(false);
   const [totalTx, setTotalTx] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 50;
+
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'FAILED'>('ALL');
 
   // Dados das contas e configs
   const [accounts, setAccounts] = useState<BankAccountResponse[]>([]);
@@ -175,6 +200,20 @@ export default function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const filteredTransactions = useMemo(() => {
+    const normalized = searchText.trim().toLowerCase();
+    return transactions.filter((t) => {
+      const matchesText =
+        !normalized ||
+        (t.externalReference ?? '').toLowerCase().includes(normalized) ||
+        (t.description ?? '').toLowerCase().includes(normalized) ||
+        (t.bank ?? '').toLowerCase().includes(normalized) ||
+        (INSTRUMENT_LABELS[t.instrument] ?? '').toLowerCase().includes(normalized);
+      const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
+      return matchesText && matchesStatus;
+    });
+  }, [transactions, searchText, statusFilter]);
+
   // Carrega contas ao abrir o modal
   const handleOpenModal = async () => {
     setModalOpen(true);
@@ -211,12 +250,16 @@ export default function TransactionsPage() {
     form.resetFields();
     setConfigs([]);
     setInstrument('PIX_IMMEDIATE');
+    setSelectedBank(undefined);
   };
 
   // Carrega configs quando seleciona uma conta
   const handleAccountChange = async (bankAccountId: number) => {
     form.setFieldValue('bankConfigurationId', undefined);
     setConfigs([]);
+    setSelectedBank(
+      (accounts.find((a) => a.id === bankAccountId)?.bank as unknown as PaymentBankType) ?? undefined
+    );
     if (!user?.tenantId) return;
     setLoadingConfigs(true);
     try {
@@ -261,6 +304,15 @@ export default function TransactionsPage() {
     const selectedAccount = accounts.find((a) => a.id === values.bankAccountId);
     const bank = (selectedAccount?.bank ?? 'EFI') as PaymentBankType;
     const bankConfigurationId = values.bankConfigurationId;
+    // ASAAS identifica o pagador pelo customer (cus_...). Injeta no campo candidato
+    // lido pelo mapper (chave/CPF) conforme o instrumento. Vazio → usa o customer
+    // padrão definido na configuração do banco (extraConfig.asaas.customer).
+    if (bank === PaymentBankType.ASAAS && values.asaasCustomer?.trim()) {
+      const customer = values.asaasCustomer.trim();
+      if (values.instrument === 'PIX_IMMEDIATE') values.pixChave = customer;
+      else if (values.instrument === 'PIX_DUE') values.pixDueChave = customer;
+      else values.boletoCpf = customer;
+    }
     setSubmitting(true);
     try {
       if (action === 'DIRECT') {
@@ -275,8 +327,8 @@ export default function TransactionsPage() {
         }
 
         if (values.instrument === 'BOLETO') {
-          if (!values.boletoNome) throw new Error('Informe o nome do cliente');
-          if (!values.boletoCpf) throw new Error('Informe o CPF');
+          if (bank !== PaymentBankType.ASAAS && !values.boletoNome) throw new Error('Informe o nome do cliente');
+          if (bank !== PaymentBankType.ASAAS && !values.boletoCpf) throw new Error('Informe o CPF');
           if (!values.boletoExpireAt) throw new Error('Informe o vencimento');
           if (!values.boletoItemValue) throw new Error('Informe o valor');
         }
@@ -452,22 +504,65 @@ export default function TransactionsPage() {
       ),
     },
     {
-      title: 'Referência / Descrição',
+      title: 'Descrição / Referência',
       key: 'ref',
       render: (_: unknown, record: Transaction) => (
-        <div>
+        <Space direction="vertical" size={4} style={{ maxWidth: 340 }}>
+          {record.description ? (
+            <Tooltip title={record.description}>
+              <Text strong ellipsis style={{ display: 'block', maxWidth: 340 }}>
+                {record.description}
+              </Text>
+            </Tooltip>
+          ) : (
+            <Text type="secondary" italic>Sem descrição</Text>
+          )}
+
           {record.externalReference && (
-            <Text code copyable style={{ fontSize: 12 }}>{record.externalReference}</Text>
+            <Space size={4} align="center">
+              <Text type="secondary" style={{ fontSize: 12 }}>Ref.</Text>
+              <Text
+                code
+                copyable={{ tooltips: ['Copiar referência', 'Copiada'] }}
+                style={{ fontSize: 12, marginInlineEnd: 0 }}
+              >
+                {record.externalReference}
+              </Text>
+            </Space>
           )}
-          {record.checkoutUrl && (
-            <div style={{ marginTop: 4 }}>
-              <a href={record.checkoutUrl} target="_blank" rel="noreferrer">Abrir checkout</a>
-            </div>
-          )}
-          {record.description && (
-            <div><Text type="secondary" style={{ fontSize: 12 }}>{record.description}</Text></div>
-          )}
-        </div>
+
+          {(() => {
+            const token = resolveCheckoutToken(record.checkoutToken, record.checkoutUrl);
+            if (!token) return null;
+            const path = `/checkout/${token}`;
+            return (
+              <Space size={4} wrap>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<ExportOutlined />}
+                  href={path}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Abrir checkout
+                </Button>
+                <Tooltip title="Copiar link do checkout">
+                  <Button
+                    size="small"
+                    icon={<LinkOutlined />}
+                    onClick={() => {
+                      const full =
+                        typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+                      navigator.clipboard?.writeText(full);
+                      message.success('Link do checkout copiado');
+                    }}
+                  />
+                </Tooltip>
+              </Space>
+            );
+          })()}
+        </Space>
       ),
     },
     {
@@ -499,110 +594,128 @@ export default function TransactionsPage() {
   // ─── CAMPOS DINÂMICOS ────────────────────────────────────────────────────────
   const pixImmediateFields = (
     <>
-      <Form.Item
-        label="Valor (R$)"
-        name="pixAmount"
-        rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01, message: 'Mínimo R$ 0,01' }]}
-      >
-        <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," step={0.01} />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            label="Valor (R$)"
+            name="pixAmount"
+            rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01, message: 'Mínimo R$ 0,01' }]}
+          >
+            <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," step={0.01} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item label="Validade (segundos)" name="pixExpiracao" initialValue={3600}>
+            <InputNumber style={{ width: '100%' }} min={60} />
+          </Form.Item>
+        </Col>
+      </Row>
       <Form.Item label="Descrição / Solicitação ao pagador" name="pixDescription">
         <Input placeholder="Ex: Pagamento de serviço (opcional)" />
       </Form.Item>
       <Form.Item label="Chave PIX" name="pixChave">
         <Input placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória (opcional)" />
       </Form.Item>
-      <Form.Item label="Validade (segundos)" name="pixExpiracao" initialValue={3600}>
-        <InputNumber style={{ width: '100%' }} min={60} />
-      </Form.Item>
       <Divider plain style={{ fontSize: 12 }}>Devedor (opcional)</Divider>
-      <Space.Compact style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item name="pixNome" style={{ flex: 1 }}><Input placeholder="Nome" /></Form.Item>
-        <Form.Item name="pixCpf" style={{ flex: 1 }}><Input placeholder="CPF" /></Form.Item>
-        <Form.Item name="pixCnpj" style={{ flex: 1 }}><Input placeholder="CNPJ" /></Form.Item>
-      </Space.Compact>
+      <Row gutter={16}>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixNome"><Input placeholder="Nome" /></Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixCpf"><Input placeholder="CPF" /></Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixCnpj"><Input placeholder="CNPJ" /></Form.Item>
+        </Col>
+      </Row>
     </>
   );
 
   const pixDueFields = (
     <>
-      <Form.Item
-        label="TXID (identificador único)"
-        name="pixDueTxid"
-      >
-        <Input placeholder="Ex: abc123 (32 chars alfanumérico)" />
-      </Form.Item>
-      <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item
-          label="Data de Vencimento"
-          name="pixDueDataVencimento"
-          style={{ flex: 1 }}
-        >
-          <Input type="date" />
-        </Form.Item>
-        <Form.Item label="Valor (R$)" name="pixDueAmount" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]} style={{ flex: 1 }}>
-          <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," />
-        </Form.Item>
-      </Space>
-      <Form.Item label="Solicitação ao pagador" name="pixDueSolicitacao">
-        <Input placeholder="Opcional" />
-      </Form.Item>
-      <Form.Item label="Chave PIX do recebedor" name="pixDueChave">
-        <Input placeholder="Opcional — usa chave padrão da configuração se omitida" />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Form.Item label="TXID (identificador único)" name="pixDueTxid">
+            <Input placeholder="Ex: abc123 (32 chars alfanumérico)" />
+          </Form.Item>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Form.Item label="Vencimento" name="pixDueDataVencimento">
+            <Input type="date" />
+          </Form.Item>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Form.Item label="Valor (R$)" name="pixDueAmount" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]}>
+            <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," />
+          </Form.Item>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Form.Item label="Solicitação ao pagador" name="pixDueSolicitacao">
+            <Input placeholder="Opcional" />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item label="Chave PIX do recebedor" name="pixDueChave">
+            <Input placeholder="Opcional — usa chave padrão da configuração" />
+          </Form.Item>
+        </Col>
+      </Row>
       <Divider plain style={{ fontSize: 12 }}>Devedor (opcional)</Divider>
-      <Space.Compact style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item name="pixDueNome" style={{ flex: 1 }}><Input placeholder="Nome" /></Form.Item>
-        <Form.Item name="pixDueCpf" style={{ flex: 1 }}><Input placeholder="CPF" /></Form.Item>
-        <Form.Item name="pixDueCnpj" style={{ flex: 1 }}><Input placeholder="CNPJ" /></Form.Item>
-      </Space.Compact>
+      <Row gutter={16}>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixDueNome"><Input placeholder="Nome" /></Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixDueCpf"><Input placeholder="CPF" /></Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item name="pixDueCnpj"><Input placeholder="CNPJ" /></Form.Item>
+        </Col>
+      </Row>
     </>
   );
 
   const boletoFields = (
     <>
-      <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item
-          label="Nome do cliente"
-          name="boletoNome"
-          style={{ flex: 2 }}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item
-          label="CPF"
-          name="boletoCpf"
-          style={{ flex: 1 }}
-        >
-          <Input placeholder="000.000.000-00" />
-        </Form.Item>
-      </Space>
-      <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item label="E-mail" name="boletoEmail" style={{ flex: 2 }}>
-          <Input type="email" placeholder="Opcional" />
-        </Form.Item>
-        <Form.Item
-          label="Vencimento"
-          name="boletoExpireAt"
-          style={{ flex: 1 }}
-        >
-          <Input type="date" />
-        </Form.Item>
-      </Space>
+      <Row gutter={16}>
+        <Col xs={24} sm={16}>
+          <Form.Item label="Nome do cliente" name="boletoNome">
+            <Input />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item label="CPF" name="boletoCpf">
+            <Input placeholder="000.000.000-00" />
+          </Form.Item>
+        </Col>
+      </Row>
+      <Row gutter={16}>
+        <Col xs={24} sm={16}>
+          <Form.Item label="E-mail" name="boletoEmail">
+            <Input type="email" placeholder="Opcional" />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item label="Vencimento" name="boletoExpireAt">
+            <Input type="date" />
+          </Form.Item>
+        </Col>
+      </Row>
       <Divider plain style={{ fontSize: 12 }}>Item da cobrança</Divider>
-      <Space style={{ width: '100%', gap: 8, display: 'flex' }}>
-        <Form.Item
-          label="Descrição do item"
-          name="boletoItemName"
-          initialValue="Cobrança"
-          style={{ flex: 2 }}
-        >
-          <Input />
-        </Form.Item>
-        <Form.Item label="Valor (R$)" name="boletoItemValue" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]} style={{ flex: 1 }}>
-          <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," />
-        </Form.Item>
-      </Space>
+      <Row gutter={16}>
+        <Col xs={24} sm={16}>
+          <Form.Item label="Descrição do item" name="boletoItemName" initialValue="Cobrança">
+            <Input />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Form.Item label="Valor (R$)" name="boletoItemValue" rules={[{ required: true, message: 'Informe o valor' }, { type: 'number', min: 0.01 }]}>
+            <InputNumber style={{ width: '100%' }} placeholder="0,00" precision={2} min={0.01} decimalSeparator="," />
+          </Form.Item>
+        </Col>
+      </Row>
       <Form.Item label="Mensagem no boleto" name="boletoMessage">
         <Input placeholder="Opcional" />
       </Form.Item>
@@ -625,9 +738,31 @@ export default function TransactionsPage() {
 
       <Table
         columns={columns}
-        dataSource={transactions}
+        dataSource={filteredTransactions}
         rowKey="id"
         loading={loadingTx}
+        title={() => (
+          <Space wrap>
+            <Input.Search
+              allowClear
+              placeholder="Buscar por referência, descrição ou banco"
+              style={{ width: 320 }}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
+            <Select
+              value={statusFilter}
+              style={{ width: 180 }}
+              onChange={(value) => setStatusFilter(value)}
+              options={[
+                { label: 'Todos os status', value: 'ALL' },
+                { label: 'Pendente', value: 'PENDING' },
+                { label: 'Confirmado', value: 'CONFIRMED' },
+                { label: 'Falhou', value: 'FAILED' },
+              ]}
+            />
+          </Space>
+        )}
         pagination={{
           current: currentPage,
           pageSize: PAGE_SIZE,
@@ -653,157 +788,173 @@ export default function TransactionsPage() {
         onCancel={handleCloseModal}
         cancelText="Cancelar"
         confirmLoading={submitting}
-        width={600}
+        width={760}
         destroyOnClose
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto', paddingRight: 12 } }}
         footer={[
           <Button key="cancel" onClick={handleCloseModal} disabled={submitting}>
             Cancelar
           </Button>,
-          <Button
-            key="checkout"
-            onClick={async () => {
-              try {
-                const values = await form.validateFields();
-                await handleSubmit(values, 'CHECKOUT');
-              } catch {
-                // Validação do formulário ou do submit
-              }
-            }}
-            loading={submitting}
-          >
-            Salvar transação
-          </Button>,
-          <Button
-            key="direct"
-            type="primary"
-            onClick={async () => {
-              try {
-                const values = await form.validateFields();
-                await handleSubmit(values, 'DIRECT');
-              } catch {
-                // Validação do formulário ou do submit
-              }
-            }}
-            loading={submitting}
-          >
-            Gerar no banco
-          </Button>,
+          <Tooltip key="checkout" title="Cria o checkout interno primeiro para completar depois.">
+            <Button
+              onClick={async () => {
+                try {
+                  const values = await form.validateFields();
+                  await handleSubmit(values, 'CHECKOUT');
+                } catch {
+                  // Validação do formulário ou do submit
+                }
+              }}
+              loading={submitting}
+            >
+              Salvar transação
+            </Button>
+          </Tooltip>,
+          <Tooltip key="direct" title="Emite a cobrança imediatamente no banco selecionado.">
+            <Button
+              type="primary"
+              onClick={async () => {
+                try {
+                  const values = await form.validateFields();
+                  await handleSubmit(values, 'DIRECT');
+                } catch {
+                  // Validação do formulário ou do submit
+                }
+              }}
+              loading={submitting}
+            >
+              Gerar no banco
+            </Button>
+          </Tooltip>,
         ]}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
           {clients.length === 0 && !loadingClients && (
             <Alert
               showIcon
               type="warning"
-              message="Nenhum cliente ativo cadastrado"
-              description="Cadastre um cliente para habilitar a emissão direta no banco."
+              message="Nenhum cliente ativo cadastrado. Cadastre um cliente para habilitar a emissão direta no banco."
               style={{ marginBottom: 16 }}
             />
           )}
 
-          <Alert
-            showIcon
-            type="info"
-            message="Ações disponíveis"
-            description="Use 'Salvar transação' para criar o checkout interno primeiro. Use 'Gerar no banco' para emitir a cobrança imediatamente na EFI."
-            style={{ marginBottom: 16 }}
-          />
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                label="Cliente"
+                name="clientId"
+                extra="Opcional. Vincula a transação ao cliente e gera link de checkout."
+              >
+                <Select
+                  placeholder="Selecione um cliente"
+                  loading={loadingClients}
+                  allowClear
+                  onChange={handleClientChange}
+                  options={clients.map((c) => ({
+                    value: c.id,
+                    label: `${c.name} (${c.cpfCnpj})`,
+                  }))}
+                  notFoundContent={loadingClients ? 'Carregando...' : 'Nenhum cliente ativo cadastrado'}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                label="Conta Bancária"
+                name="bankAccountId"
+                rules={[{ required: true, message: 'Selecione a conta bancária' }]}
+              >
+                <Select
+                  placeholder="Selecione a conta bancária"
+                  loading={loadingAccounts}
+                  onChange={handleAccountChange}
+                  options={accounts.map((a) => ({
+                    value: a.id,
+                    label: (
+                      <Space>
+                        <Tag style={{ margin: 0 }}>{a.bank}</Tag>
+                        {a.name}
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Ag. {a.cdAgency} / {a.cdAccount}-{a.cdAccountDigit}
+                        </Text>
+                      </Space>
+                    ),
+                  }))}
+                  notFoundContent={loadingAccounts ? 'Carregando...' : 'Nenhuma conta ativa cadastrada'}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
-          <Form.Item
-            label="Cliente"
-            name="clientId"
-            extra="Opcional. Se informado, a transação fica vinculada ao cliente e com link de checkout."
-          >
-            <Select
-              placeholder="Selecione um cliente"
-              loading={loadingClients}
-              allowClear
-              onChange={handleClientChange}
-              options={clients.map((c) => ({
-                value: c.id,
-                label: `${c.name} (${c.cpfCnpj})`,
-              }))}
-              notFoundContent={loadingClients ? 'Carregando...' : 'Nenhum cliente ativo cadastrado'}
-            />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                label="Ambiente"
+                name="bankConfigurationId"
+                rules={[{ required: true, message: 'Selecione o ambiente' }]}
+              >
+                <Select
+                  placeholder="Selecione o ambiente (Sandbox / Produção)"
+                  loading={loadingConfigs}
+                  disabled={configs.length === 0 && !loadingConfigs}
+                  options={configs.map((c) => ({
+                    value: c.id,
+                    label: (
+                      <Space>
+                        {c.environment === Environment.PRODUCTION ? (
+                          <Tag color="blue" style={{ margin: 0 }}>Produção</Tag>
+                        ) : (
+                          <Tag color="orange" style={{ margin: 0 }}>Sandbox</Tag>
+                        )}
+                        {c.environment === Environment.PRODUCTION ? 'Produção' : 'Homologação (Sandbox)'}
+                      </Space>
+                    ),
+                  }))}
+                  notFoundContent={
+                    loadingConfigs
+                      ? 'Carregando...'
+                      : form.getFieldValue('bankAccountId')
+                      ? 'Nenhuma configuração ativa. Configure o banco primeiro.'
+                      : 'Selecione uma conta primeiro'
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                label="Forma de Pagamento"
+                name="instrument"
+                initialValue="PIX_IMMEDIATE"
+                rules={[{ required: true }]}
+              >
+                <Select
+                  onChange={(val) => setInstrument(val as PaymentInstrument)}
+                  options={[
+                    { value: 'PIX_IMMEDIATE', label: '⚡ PIX Imediato' },
+                    { value: 'PIX_DUE', label: '📅 PIX com Vencimento' },
+                    { value: 'BOLETO', label: '🏦 Boleto Bancário' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
-          {/* Conta bancária */}
-          <Form.Item
-            label="Conta Bancária"
-            name="bankAccountId"
-            rules={[{ required: true, message: 'Selecione a conta bancária' }]}
-          >
-            <Select
-              placeholder="Selecione a conta bancária"
-              loading={loadingAccounts}
-              onChange={handleAccountChange}
-              options={accounts.map((a) => ({
-                value: a.id,
-                label: (
-                  <Space>
-                    <Tag style={{ margin: 0 }}>{a.bank}</Tag>
-                    {a.name}
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Ag. {a.cdAgency} / {a.cdAccount}-{a.cdAccountDigit}
-                    </Text>
-                  </Space>
-                ),
-              }))}
-              notFoundContent={loadingAccounts ? 'Carregando...' : 'Nenhuma conta ativa cadastrada'}
-            />
-          </Form.Item>
+          <Divider style={{ margin: '4px 0 16px' }} />
 
-          {/* Ambiente */}
-          <Form.Item
-            label="Ambiente"
-            name="bankConfigurationId"
-            rules={[{ required: true, message: 'Selecione o ambiente' }]}
-          >
-            <Select
-              placeholder="Selecione o ambiente (Sandbox / Produção)"
-              loading={loadingConfigs}
-              disabled={configs.length === 0 && !loadingConfigs}
-              options={configs.map((c) => ({
-                value: c.id,
-                label: (
-                  <Space>
-                    {c.environment === Environment.PRODUCTION ? (
-                      <Tag color="blue" style={{ margin: 0 }}>Produção</Tag>
-                    ) : (
-                      <Tag color="orange" style={{ margin: 0 }}>Sandbox</Tag>
-                    )}
-                    {c.environment === Environment.PRODUCTION ? 'Produção' : 'Homologação (Sandbox)'}
-                  </Space>
-                ),
-              }))}
-              notFoundContent={
-                loadingConfigs
-                  ? 'Carregando...'
-                  : form.getFieldValue('bankAccountId')
-                  ? 'Nenhuma configuração ativa. Configure o banco primeiro.'
-                  : 'Selecione uma conta primeiro'
-              }
-            />
-          </Form.Item>
-
-          {/* Forma de pagamento */}
-          <Form.Item
-            label="Forma de Pagamento"
-            name="instrument"
-            initialValue="PIX_IMMEDIATE"
-            rules={[{ required: true }]}
-          >
-            <Select
-              onChange={(val) => setInstrument(val as PaymentInstrument)}
-              options={[
-                { value: 'PIX_IMMEDIATE', label: '⚡ PIX Imediato' },
-                { value: 'PIX_DUE', label: '📅 PIX com Vencimento' },
-                { value: 'BOLETO', label: '🏦 Boleto Bancário' },
-              ]}
-            />
-          </Form.Item>
-
-          <Divider />
+          {selectedBank === PaymentBankType.ASAAS && (
+            <>
+              <Alert
+                showIcon
+                type="info"
+                style={{ marginBottom: 16 }}
+                message="Cobrança ASAAS"
+                description="Informe o identificador do cliente ASAAS (cus_...). Se vazio, será usado o customer padrão definido na configuração do banco."
+              />
+              <Form.Item label="Customer ASAAS (cus_...)" name="asaasCustomer">
+                <Input placeholder="cus_000000000000 (opcional se houver customer padrão na configuração)" />
+              </Form.Item>
+            </>
+          )}
 
           {instrument === 'PIX_IMMEDIATE' && pixImmediateFields}
           {instrument === 'PIX_DUE' && pixDueFields}
@@ -831,35 +982,41 @@ export default function TransactionsPage() {
               <Text copyable>{resultModal.data.id}</Text>
             </div>
 
-            {resultModal.kind === 'checkout' && resultModal.data.checkoutUrl && (
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>Link do checkout</Text>
-                <Alert
-                  message={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Text
-                        style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}
-                      >
-                        {resultModal.data.checkoutUrl}
-                      </Text>
-                      <Button
-                        size="small"
-                        icon={<CopyOutlined />}
-                        onClick={() => {
-                          navigator.clipboard.writeText(resultModal.data.checkoutUrl!);
-                          message.success('Copiado!');
-                        }}
-                      />
-                      <Button size="small" href={resultModal.data.checkoutUrl} target="_blank" rel="noreferrer">
-                        Abrir
-                      </Button>
-                    </div>
-                  }
-                  type="info"
-                  style={{ marginTop: 4 }}
-                />
-              </div>
-            )}
+            {resultModal.kind === 'checkout' && (() => {
+              const token = resolveCheckoutToken(resultModal.data.checkoutToken, resultModal.data.checkoutUrl);
+              if (!token) return null;
+              const path = `/checkout/${token}`;
+              const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+              return (
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Link do checkout</Text>
+                  <Alert
+                    message={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text
+                          style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}
+                        >
+                          {shareUrl}
+                        </Text>
+                        <Button
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => {
+                            navigator.clipboard.writeText(shareUrl);
+                            message.success('Copiado!');
+                          }}
+                        />
+                        <Button size="small" type="primary" href={path} target="_blank" rel="noreferrer">
+                          Abrir
+                        </Button>
+                      </div>
+                    }
+                    type="info"
+                    style={{ marginTop: 4 }}
+                  />
+                </div>
+              );
+            })()}
 
             {resultModal.kind === 'charge' && resultModal.data.pixCopiaECola && (
               <div>

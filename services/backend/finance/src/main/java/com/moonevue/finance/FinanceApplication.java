@@ -18,7 +18,8 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
         "com.moonevue.core.entity"
 })
 @EnableJpaRepositories(basePackages = {
-        "com.moonevue.core.repository"
+        "com.moonevue.core.repository",
+        "com.moonevue.finance.analytics.repository"
 })
 @EnableMethodSecurity
 public class FinanceApplication {

@@ -47,7 +47,7 @@ export default function LoginPage() {
       <section
         className="auth-marketing"
         style={{
-          background: '#f0f5ff',
+          background: '#fafafa',
           padding: '60px 48px',
           display: 'flex',
           flexDirection: 'column',
@@ -58,8 +58,8 @@ export default function LoginPage() {
         <div
           style={{
             display: 'inline-block',
-            background: '#e6f4ff',
-            color: '#1677ff',
+            background: '#f5f5f5',
+            color: '#0a0a0a',
             padding: '4px 14px',
             borderRadius: 99,
             fontSize: 13,

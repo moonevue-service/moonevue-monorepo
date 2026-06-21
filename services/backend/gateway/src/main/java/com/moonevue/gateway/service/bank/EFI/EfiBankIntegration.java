@@ -132,7 +132,7 @@ public class EfiBankIntegration implements BankIntegration {
         calendario.put("dataDeVencimento", p.dataDeVencimento().toString());
         if (p.validadeAposVencimento() != null) calendario.put("validadeAposVencimento", p.validadeAposVencimento());
 
-        maybePutDevedorDue(body, p);
+        putRequiredDevedorDue(body, p);
 
         ObjectNode valor = body.putObject("valor");
         valor.put("original", formatAmount(p.amountOriginal()));
@@ -201,9 +201,24 @@ public class EfiBankIntegration implements BankIntegration {
         ObjectNode billet = payment.putObject("banking_billet");
 
         var cust = req.payment().boleto().customer();
+        if (cust == null) {
+            throw new IllegalArgumentException("Pagador é obrigatório para boleto (nome + CPF ou CNPJ).");
+        }
+        String custName = trimToNull(cust.name());
+        String custCpf = trimToNull(cust.cpf());
+        String custCnpj = cust.juridicalPerson() != null ? trimToNull(cust.juridicalPerson().cnpj()) : null;
+        if (custName == null) {
+            throw new IllegalArgumentException("Nome do pagador é obrigatório para boleto.");
+        }
+        if (custCpf == null && custCnpj == null) {
+            throw new IllegalArgumentException("CPF ou CNPJ do pagador é obrigatório para boleto.");
+        }
+        if (custCpf != null && custCnpj != null) {
+            throw new IllegalArgumentException("Informe apenas CPF ou apenas CNPJ do pagador, não ambos.");
+        }
         ObjectNode customer = billet.putObject("customer");
-        if (cust.name() != null) customer.put("name", cust.name());
-        if (cust.cpf() != null) customer.put("cpf", cust.cpf());
+        customer.put("name", custName);
+        if (custCpf != null) customer.put("cpf", custCpf);
         if (cust.email() != null) customer.put("email", cust.email());
         if (cust.phoneNumber() != null) customer.put("phone_number", cust.phoneNumber());
 
@@ -372,18 +387,24 @@ public class EfiBankIntegration implements BankIntegration {
         if (cnpj != null) devedor.put("cnpj", cnpj);
     }
 
-    private void maybePutDevedorDue(ObjectNode body, ChargeRequestDTO.PixDue p) {
-        if (p == null) return;
+    private void putRequiredDevedorDue(ObjectNode body, ChargeRequestDTO.PixDue p) {
+        // PIX com vencimento (cobv) exige devedor obrigatório (nome + CPF/CNPJ).
+        if (p == null) {
+            throw new IllegalArgumentException("Devedor é obrigatório para PIX com vencimento.");
+        }
 
         String nome = trimToNull(p.nome());
         String cpf = trimToNull(p.cpf());
         String cnpj = trimToNull(p.cnpj());
 
         if (nome == null) {
-            if (cpf != null || cnpj != null || trimToNull(p.logradouro()) != null || trimToNull(p.cidade()) != null || trimToNull(p.uf()) != null || trimToNull(p.cep()) != null) {
-                log.warn("[EFI] Ignorando devedor em PIX com vencimento por ausência de nome");
-            }
-            return;
+            throw new IllegalArgumentException("Nome do devedor é obrigatório para PIX com vencimento.");
+        }
+        if (cpf == null && cnpj == null) {
+            throw new IllegalArgumentException("CPF ou CNPJ do devedor é obrigatório para PIX com vencimento.");
+        }
+        if (cpf != null && cnpj != null) {
+            throw new IllegalArgumentException("Informe apenas CPF ou apenas CNPJ do devedor, não ambos.");
         }
 
         ObjectNode devedor = body.putObject("devedor");

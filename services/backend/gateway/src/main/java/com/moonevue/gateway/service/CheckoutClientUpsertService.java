@@ -19,15 +19,27 @@ public class CheckoutClientUpsertService {
 
     private final ClientRepository clientRepository;
     private final TenantRepository tenantRepository;
+    private final ClientBankIntegrationService clientBankIntegrationService;
 
     public CheckoutClientUpsertService(ClientRepository clientRepository,
-                                       TenantRepository tenantRepository) {
+                                       TenantRepository tenantRepository,
+                                       ClientBankIntegrationService clientBankIntegrationService) {
         this.clientRepository = clientRepository;
         this.tenantRepository = tenantRepository;
+        this.clientBankIntegrationService = clientBankIntegrationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long upsertActiveClient(Long tenantId, String document, String name, String email, String phone) {
+        return upsertActiveClient(tenantId, document, name, email, phone, null);
+    }
+
+    /**
+     * Faz o upsert do cliente e, quando informado o provedor bancário, garante o
+     * registro de integração (multi-banco) na mesma transação independente.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Long upsertActiveClient(Long tenantId, String document, String name, String email, String phone, String bankProvider) {
         if (tenantId == null || document == null || name == null) {
             return null;
         }
@@ -59,6 +71,11 @@ public class CheckoutClientUpsertService {
         }
 
         client = clientRepository.save(client);
+
+        if (bankProvider != null && !bankProvider.isBlank()) {
+            clientBankIntegrationService.ensureIntegration(client, bankProvider);
+        }
+
         return client.getId();
     }
 }

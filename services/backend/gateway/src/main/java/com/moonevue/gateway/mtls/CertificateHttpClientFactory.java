@@ -71,7 +71,7 @@ public class CertificateHttpClientFactory {
             // Ajuste de timeouts básicos
             var requestConfig = org.apache.hc.client5.http.config.RequestConfig.custom()
                     .setConnectTimeout(org.apache.hc.core5.util.Timeout.of(Duration.ofSeconds(15)))
-                    .setResponseTimeout(org.apache.hc.core5.util.Timeout.of(Duration.ofSeconds(60)))
+                    .setResponseTimeout(org.apache.hc.core5.util.Timeout.of(Duration.ofSeconds(20)))
                     .build();
 
             return HttpClients.custom()

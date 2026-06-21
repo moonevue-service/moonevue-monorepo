@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from 'antd';
 import { CloseOutlined, MenuOutlined } from '@ant-design/icons';
+import { dmSerifDisplay } from '@/app/ui/fonts';
 
 const links = [
   { href: '#produto', label: 'Produto' },
@@ -39,8 +40,12 @@ export default function Header() {
           justifyContent: 'space-between',
         }}
       >
-        <Link href="/" style={{ fontWeight: 700, fontSize: 16, color: '#1677ff', textDecoration: 'none' }}>
-          Moonevue
+        <Link
+          href="/"
+          className={dmSerifDisplay.className}
+          style={{ fontSize: 22, color: '#0a0a0a', textDecoration: 'none' }}
+        >
+          MOONEVUE
         </Link>
 
         {/* Desktop nav */}

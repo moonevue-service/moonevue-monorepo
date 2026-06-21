@@ -19,6 +19,7 @@ import com.moonevue.gateway.dto.CheckoutClientLookupDTO;
 import com.moonevue.gateway.dto.CheckoutInfoDTO;
 import com.moonevue.gateway.dto.CheckoutPayRequest;
 import com.moonevue.gateway.service.bank.BankIntegration;
+import com.moonevue.gateway.service.policy.DebtorRequirementPolicy;
 import com.moonevue.gateway.util.ExtraConfigUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,7 @@ public class CheckoutService {
     private final ObjectMapper objectMapper;
     private final ClientRepository clientRepository;
     private final CheckoutClientUpsertService checkoutClientUpsertService;
+    private final DebtorRequirementPolicy debtorRequirementPolicy;
 
     public CheckoutService(JdbcTemplate jdbcTemplate,
                            TransactionRepository transactionRepository,
@@ -53,7 +55,8 @@ public class CheckoutService {
                            BankIntegrationFactory integrationFactory,
                            ObjectMapper objectMapper,
                            ClientRepository clientRepository,
-                           CheckoutClientUpsertService checkoutClientUpsertService) {
+                           CheckoutClientUpsertService checkoutClientUpsertService,
+                           DebtorRequirementPolicy debtorRequirementPolicy) {
         this.jdbcTemplate = jdbcTemplate;
         this.transactionRepository = transactionRepository;
         this.transactionLogRepository = transactionLogRepository;
@@ -61,6 +64,7 @@ public class CheckoutService {
         this.objectMapper = objectMapper;
         this.clientRepository = clientRepository;
         this.checkoutClientUpsertService = checkoutClientUpsertService;
+        this.debtorRequirementPolicy = debtorRequirementPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -171,7 +175,10 @@ public class CheckoutService {
                 req.payerDocument(),
                 req.payerName(),
                 req.payerEmail(),
-                req.payerPhone());
+                req.payerPhone(),
+                tx.getBankAccount() != null && tx.getBankAccount().getBank() != null
+                        ? tx.getBankAccount().getBank().name()
+                        : null);
         if (clientId != null) {
             clientRepository.findById(clientId).ifPresent(tx::setClient);
         }
@@ -192,6 +199,10 @@ public class CheckoutService {
         }
 
         ChargeRequestDTO chargeRequest = buildChargeRequest(tx, req, config.getId(), effectivePixKey);
+
+        // Valida o devedor/pagador conforme a política central (provider + tipo de cobrança).
+        // Mantém o checkout alinhado às mesmas regras do fluxo direto (PaymentService) e da EFI.
+        debtorRequirementPolicy.validate(chargeRequest.bank(), chargeRequest);
 
         String payloadJson;
         String responseJson;

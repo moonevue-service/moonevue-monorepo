@@ -2,6 +2,7 @@ import { ApiClient } from './client';
 
 export enum PaymentBankType {
   EFI = 'EFI',
+  ASAAS = 'ASAAS',
 }
 
 export enum TransactionStatus {

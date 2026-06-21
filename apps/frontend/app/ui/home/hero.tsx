@@ -46,8 +46,8 @@ export default function Hero() {
           <div
             style={{
               display: 'inline-block',
-              background: '#e6f4ff',
-              color: '#1677ff',
+              background: '#f5f5f5',
+              color: '#0a0a0a',
               padding: '4px 14px',
               borderRadius: 99,
               fontSize: 13,
@@ -102,8 +102,8 @@ export default function Hero() {
                   <div
                     style={{
                       display: 'inline-flex',
-                      background: '#e6f4ff',
-                      color: '#1677ff',
+                      background: '#f5f5f5',
+                      color: '#0a0a0a',
                       borderRadius: 8,
                       padding: 10,
                       width: 'fit-content',
@@ -126,8 +126,8 @@ export default function Hero() {
       <section id="integracoes" style={{ ...containerStyle, paddingBottom: 96 }}>
         <Card
           style={{
-            background: '#f0f5ff',
-            border: '1px solid #d6e4ff',
+            background: '#fafafa',
+            border: '1px solid #e5e5e5',
           }}
         >
           <div
@@ -142,7 +142,7 @@ export default function Hero() {
           >
             <div>
               <p
-                style={{ color: '#1677ff', fontSize: 13, fontWeight: 500, margin: '0 0 4px 0' }}
+                style={{ color: '#0a0a0a', fontSize: 13, fontWeight: 500, margin: '0 0 4px 0' }}
               >
                 Pronto para escalar
               </p>

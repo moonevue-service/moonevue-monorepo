@@ -49,6 +49,7 @@ export default function EmployeesPage() {
   const [form] = Form.useForm<EmployeeFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [createdEmployees, setCreatedEmployees] = useState<CreatedEmployee[]>([]);
+  const [searchText, setSearchText] = useState('');
 
   const allowed = canManageEmployees(user?.roles, user?.permissions);
 
@@ -95,6 +96,12 @@ export default function EmployeesPage() {
       setSubmitting(false);
     }
   };
+
+  const filteredEmployees = useMemo(() => {
+    const normalized = searchText.trim().toLowerCase();
+    if (!normalized) return createdEmployees;
+    return createdEmployees.filter((e) => e.email.toLowerCase().includes(normalized));
+  }, [createdEmployees, searchText]);
 
   const columns: ColumnsType<CreatedEmployee> = [
     { title: 'ID', dataIndex: 'userId', key: 'userId', width: 100 },
@@ -200,8 +207,19 @@ export default function EmployeesPage() {
         <Table
           rowKey="key"
           columns={columns}
-          dataSource={createdEmployees}
+          dataSource={filteredEmployees}
           pagination={false}
+          title={() => (
+            <Space wrap>
+              <Input.Search
+                allowClear
+                placeholder="Buscar por e-mail"
+                style={{ width: 320 }}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+            </Space>
+          )}
           locale={{ emptyText: 'Nenhum funcionário criado nesta sessão.' }}
         />
       </Card>

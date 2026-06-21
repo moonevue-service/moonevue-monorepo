@@ -21,6 +21,7 @@ import com.moonevue.gateway.dto.ChargeSummaryDTO;
 import com.moonevue.gateway.dto.CreateCheckoutTransactionRequest;
 import com.moonevue.gateway.dto.TransactionSummaryDTO;
 import com.moonevue.gateway.service.bank.BankIntegration;
+import com.moonevue.gateway.service.policy.DebtorRequirementPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,6 +53,8 @@ public class PaymentService {
     private final TransactionRepository transactionRepository;
     private final TransactionLogRepository transactionLogRepository;
     private final ChargeRepository chargeRepository;
+    private final DebtorRequirementPolicy debtorRequirementPolicy;
+    private final ClientBankIntegrationService clientBankIntegrationService;
 
     public PaymentService(BankIntegrationFactory factory,
                           ObjectMapper objectMapper,
@@ -59,7 +62,9 @@ public class PaymentService {
                           ClientRepository clientRepository,
                           TransactionRepository transactionRepository,
                           TransactionLogRepository transactionLogRepository,
-                          ChargeRepository chargeRepository) {
+                          ChargeRepository chargeRepository,
+                          DebtorRequirementPolicy debtorRequirementPolicy,
+                          ClientBankIntegrationService clientBankIntegrationService) {
         this.factory = factory;
         this.objectMapper = objectMapper;
         this.bankConfigurationRepository = bankConfigurationRepository;
@@ -67,6 +72,8 @@ public class PaymentService {
         this.transactionRepository = transactionRepository;
         this.transactionLogRepository = transactionLogRepository;
         this.chargeRepository = chargeRepository;
+        this.debtorRequirementPolicy = debtorRequirementPolicy;
+        this.clientBankIntegrationService = clientBankIntegrationService;
     }
 
     @Transactional(readOnly = true)
@@ -194,6 +201,14 @@ public class PaymentService {
             if (!client.getTenant().getId().equals(tenantId)) {
                 throw new IllegalArgumentException("Cliente não pertence ao tenant");
             }
+        }
+
+        // Valida devedor/pagador conforme a política do provedor + tipo de cobrança.
+        debtorRequirementPolicy.validate(request.bank(), request);
+
+        // Garante o vínculo de integração bancária do cliente (ex.: identificador interno EFI).
+        if (client != null) {
+            clientBankIntegrationService.ensureIntegration(client, request.bank().name());
         }
 
         BigDecimal amount = extractAmount(request);
