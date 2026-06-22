@@ -39,6 +39,9 @@ moonevue:
       hmac:
         secret: ${WEBHOOK_HMAC_SECRET}
         header: X-Signature
+      asaas:
+        token: ${ASAAS_WEBHOOK_TOKEN:}
+        header: ${ASAAS_WEBHOOK_HEADER:asaas-access-token}
       timestamp:
         header: X-Signature-Timestamp
         skew-seconds: 300

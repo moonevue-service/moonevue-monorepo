@@ -21,6 +21,9 @@ public final class AsaasConfigKeys {
     /** Customer id (cus_xxx) padrão da configuração. Path: {@code asaas.customer}. */
     public static final String CUSTOMER = NS + ".customer";
 
+    /** Token de autenticação para recebimento de webhooks ASAAS por ambiente. Path: {@code asaas.webhook_token}. */
+    public static final String WEBHOOK_TOKEN = NS + ".webhook_token";
+
     /** Override do billingType (UNDEFINED/BOLETO/CREDIT_CARD/PIX). Path: {@code asaas.billingType}. */
     public static final String BILLING_TYPE = NS + ".billingType";
 

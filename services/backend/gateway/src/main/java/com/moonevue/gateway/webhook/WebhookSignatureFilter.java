@@ -7,6 +7,10 @@ import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequestWrapper;
+import com.moonevue.core.enums.BankType;
+import com.moonevue.core.repository.BankConfigurationRepository;
+import com.moonevue.gateway.service.bank.ASAAS.config.AsaasConfigKeys;
+import com.moonevue.gateway.util.ExtraConfigUtils;
 import org.apache.hc.client5.http.utils.Hex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +33,12 @@ import java.util.List;
 
 @Component
 public class WebhookSignatureFilter extends OncePerRequestFilter {
+    private final BankConfigurationRepository bankConfigurationRepository;
+
+    public WebhookSignatureFilter(BankConfigurationRepository bankConfigurationRepository) {
+        this.bankConfigurationRepository = bankConfigurationRepository;
+    }
+
 
     private static final Logger log = LoggerFactory.getLogger(WebhookSignatureFilter.class);
 
@@ -37,6 +47,12 @@ public class WebhookSignatureFilter extends OncePerRequestFilter {
 
     @Value("${moonevue.gateway.webhooks.hmac.header:X-Signature}")
     private String signatureHeader;
+
+    @Value("${moonevue.gateway.webhooks.asaas.token:}")
+    private String asaasWebhookToken;
+
+    @Value("${moonevue.gateway.webhooks.asaas.header:asaas-access-token}")
+    private String asaasWebhookHeader;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -49,6 +65,20 @@ public class WebhookSignatureFilter extends OncePerRequestFilter {
 
         byte[] body = StreamUtils.copyToByteArray(req.getInputStream());
         var wrapped = new CachedBodyHttpServletRequest(req, body);
+
+        String provider = extractProvider(wrapped.getRequestURI());
+        if ("asaas".equals(provider)) {
+            if (!validateAsaasToken(wrapped)) {
+                log.warn("Webhook ASAAS não autorizado uri={} ip={}", req.getRequestURI(), req.getRemoteAddr());
+                res.sendError(401);
+                return;
+            }
+
+            log.info("Webhook ASAAS autenticado por token uri={}", req.getRequestURI());
+            setWebhookAuthentication();
+            chain.doFilter(wrapped, res);
+            return;
+        }
 
         String sig = wrapped.getHeader(signatureHeader);
         if (!StringUtils.hasText(sig) || !StringUtils.hasText(hmacSecret)) {
@@ -77,6 +107,42 @@ public class WebhookSignatureFilter extends OncePerRequestFilter {
         log.info("Webhook autenticado por HMAC uri={}", req.getRequestURI());
         setWebhookAuthentication();
         chain.doFilter(wrapped, res);
+    }
+
+    private String extractProvider(String uri) {
+        if (uri == null) {
+            return null;
+        }
+        String marker = "/webhooks/banks/";
+        int idx = uri.indexOf(marker);
+        if (idx < 0) {
+            return null;
+        }
+        String tail = uri.substring(idx + marker.length());
+        int slash = tail.indexOf('/');
+        String provider = slash >= 0 ? tail.substring(0, slash) : tail;
+        return provider == null ? null : provider.trim().toLowerCase();
+    }
+
+    private boolean validateAsaasToken(HttpServletRequest request) {
+        String incoming = request.getHeader(asaasWebhookHeader);
+        if (!StringUtils.hasText(incoming)) {
+            return false;
+        }
+
+        String incomingTrimmed = incoming.trim();
+
+        if (StringUtils.hasText(asaasWebhookToken) && asaasWebhookToken.trim().equals(incomingTrimmed)) {
+            return true;
+        }
+
+        // Permite token por ambiente configurado na integração ASAAS da conta bancária.
+        return bankConfigurationRepository.findActiveByBankType(BankType.ASAAS)
+                .stream()
+                .map(cfg -> ExtraConfigUtils.getString(cfg.getExtraConfig(), AsaasConfigKeys.WEBHOOK_TOKEN, null))
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .anyMatch(token -> token.equals(incomingTrimmed));
     }
 
     private void setWebhookAuthentication() {

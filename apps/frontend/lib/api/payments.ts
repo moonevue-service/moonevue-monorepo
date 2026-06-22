@@ -148,6 +148,8 @@ export interface TransactionSummary {
   checkoutAccessMode?: string;
   bank?: string;
   createdAt: string;
+  boletoInvoiceUrl?: string;
+  boletoPdfUrl?: string;
 }
 
 export interface PageResponse<T> {

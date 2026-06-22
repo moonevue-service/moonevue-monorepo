@@ -57,6 +57,8 @@ interface Transaction {
   checkoutToken?: string;
   checkoutUrl?: string;
   checkoutExpiresAt?: string;
+  boletoInvoiceUrl?: string;
+  boletoPdfUrl?: string;
 }
 
 // FormValues tipada por forma de pagamento
@@ -65,8 +67,6 @@ type FormValues = {
   bankConfigurationId: number;
   clientId?: number;
   instrument: PaymentInstrument;
-  // ASAAS
-  asaasCustomer?: string;
   // PIX Imediato
   pixAmount?: number;
   pixDescription?: string;
@@ -95,15 +95,35 @@ type FormValues = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Rascunho',
+  CHECKOUT_OPEN: 'Checkout aberto',
+  PROCESSING: 'Processando',
   PENDING: 'Pendente',
+  AUTHORIZED: 'Autorizado',
   CONFIRMED: 'Confirmado',
+  PAID: 'Pago',
+  CAPTURED: 'Capturado',
+  SETTLED: 'Liquidado',
+  CANCELED: 'Cancelado',
+  EXPIRED: 'Expirado',
   FAILED: 'Falhou',
+  REFUNDED: 'Estornado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  DRAFT: 'default',
+  CHECKOUT_OPEN: 'blue',
+  PROCESSING: 'processing',
   PENDING: 'warning',
+  AUTHORIZED: 'cyan',
   CONFIRMED: 'success',
+  PAID: 'success',
+  CAPTURED: 'success',
+  SETTLED: 'success',
+  CANCELED: 'default',
+  EXPIRED: 'orange',
   FAILED: 'error',
+  REFUNDED: 'volcano',
 };
 
 const INSTRUMENT_LABELS: Record<PaymentInstrument, string> = {
@@ -157,7 +177,7 @@ export default function TransactionsPage() {
   const PAGE_SIZE = 50;
 
   const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'FAILED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Dados das contas e configs
   const [accounts, setAccounts] = useState<BankAccountResponse[]>([]);
@@ -185,6 +205,8 @@ export default function TransactionsPage() {
           checkoutToken: t.checkoutToken,
           checkoutUrl: t.checkoutUrl,
           checkoutExpiresAt: t.checkoutExpiresAt,
+          boletoInvoiceUrl: t.boletoInvoiceUrl,
+          boletoPdfUrl: t.boletoPdfUrl,
         }))
       );
       setTotalTx(resp.totalElements);
@@ -304,15 +326,6 @@ export default function TransactionsPage() {
     const selectedAccount = accounts.find((a) => a.id === values.bankAccountId);
     const bank = (selectedAccount?.bank ?? 'EFI') as PaymentBankType;
     const bankConfigurationId = values.bankConfigurationId;
-    // ASAAS identifica o pagador pelo customer (cus_...). Injeta no campo candidato
-    // lido pelo mapper (chave/CPF) conforme o instrumento. Vazio → usa o customer
-    // padrão definido na configuração do banco (extraConfig.asaas.customer).
-    if (bank === PaymentBankType.ASAAS && values.asaasCustomer?.trim()) {
-      const customer = values.asaasCustomer.trim();
-      if (values.instrument === 'PIX_IMMEDIATE') values.pixChave = customer;
-      else if (values.instrument === 'PIX_DUE') values.pixDueChave = customer;
-      else values.boletoCpf = customer;
-    }
     setSubmitting(true);
     try {
       if (action === 'DIRECT') {
@@ -532,6 +545,36 @@ export default function TransactionsPage() {
           )}
 
           {(() => {
+            const isAsaasBoleto = record.bank === PaymentBankType.ASAAS && record.instrument === 'BOLETO';
+
+            if (isAsaasBoleto && (record.boletoInvoiceUrl || record.boletoPdfUrl)) {
+              return (
+                <Space size={4} wrap>
+                  {record.boletoPdfUrl && (
+                    <Button
+                      size="small"
+                      href={record.boletoPdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      PDF
+                    </Button>
+                  )}
+                  {record.boletoInvoiceUrl && (
+                    <Button
+                      type="primary"
+                      size="small"
+                      href={record.boletoInvoiceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Link de Pagamento
+                    </Button>
+                  )}
+                </Space>
+              );
+            }
+
             const token = resolveCheckoutToken(record.checkoutToken, record.checkoutUrl);
             if (!token) return null;
             const path = `/checkout/${token}`;
@@ -562,6 +605,31 @@ export default function TransactionsPage() {
               </Space>
             );
           })()}
+          {record.bank !== PaymentBankType.ASAAS && record.boletoInvoiceUrl && (
+            <Space size={4} wrap>
+              <Button
+                type="primary"
+                size="small"
+                icon={<ExportOutlined />}
+                href={record.boletoInvoiceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Pagar boleto
+              </Button>
+              {record.boletoPdfUrl && (
+                <Button
+                  size="small"
+                  icon={<LinkOutlined />}
+                  href={record.boletoPdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  PDF
+                </Button>
+              )}
+            </Space>
+          )}
         </Space>
       ),
     },
@@ -757,7 +825,13 @@ export default function TransactionsPage() {
               options={[
                 { label: 'Todos os status', value: 'ALL' },
                 { label: 'Pendente', value: 'PENDING' },
+                { label: 'Processando', value: 'PROCESSING' },
+                { label: 'Pago', value: 'PAID' },
                 { label: 'Confirmado', value: 'CONFIRMED' },
+                { label: 'Liquidado', value: 'SETTLED' },
+                { label: 'Cancelado', value: 'CANCELED' },
+                { label: 'Expirado', value: 'EXPIRED' },
+                { label: 'Estornado', value: 'REFUNDED' },
                 { label: 'Falhou', value: 'FAILED' },
               ]}
             />
@@ -843,7 +917,12 @@ export default function TransactionsPage() {
               <Form.Item
                 label="Cliente"
                 name="clientId"
-                extra="Opcional. Vincula a transação ao cliente e gera link de checkout."
+                extra={selectedBank === PaymentBankType.ASAAS
+                  ? 'Obrigatório para ASAAS. O customer é criado/sincronizado automaticamente.'
+                  : 'Opcional. Vincula a transação ao cliente e gera link de checkout.'}
+                rules={selectedBank === PaymentBankType.ASAAS
+                  ? [{ required: true, message: 'Para ASAAS, selecione um cliente' }]
+                  : undefined}
               >
                 <Select
                   placeholder="Selecione um cliente"
@@ -948,11 +1027,8 @@ export default function TransactionsPage() {
                 type="info"
                 style={{ marginBottom: 16 }}
                 message="Cobrança ASAAS"
-                description="Informe o identificador do cliente ASAAS (cus_...). Se vazio, será usado o customer padrão definido na configuração do banco."
+                description="O cliente ASAAS é resolvido automaticamente em segundo plano com base no cliente vinculado à transação."
               />
-              <Form.Item label="Customer ASAAS (cus_...)" name="asaasCustomer">
-                <Input placeholder="cus_000000000000 (opcional se houver customer padrão na configuração)" />
-              </Form.Item>
             </>
           )}
 

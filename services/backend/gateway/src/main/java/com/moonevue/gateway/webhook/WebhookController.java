@@ -13,6 +13,14 @@ import org.springframework.web.bind.annotation.*;
 public class WebhookController {
     private final WebhookService svc;
 
+    @PostMapping("/asaas/events")
+    @PreAuthorize("hasAuthority('WEBHOOK')")
+    public ResponseEntity<Void> receiveAsaas(@RequestHeader(value = "Idempotency-Key", required = false) String idemKey,
+                                             @RequestBody String payload) {
+        svc.handle("asaas", payload, idemKey);
+        return ResponseEntity.noContent().build();
+    }
+
     // Ex.: /webhooks/banks/{provider}/events
     @PostMapping("/{provider}/events")
     @PreAuthorize("hasAuthority('WEBHOOK')") // só passa se o filtro validar assinatura/caller

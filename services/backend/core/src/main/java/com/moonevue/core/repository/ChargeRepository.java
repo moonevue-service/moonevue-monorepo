@@ -20,4 +20,7 @@ public interface ChargeRepository extends JpaRepository<Charge, Long> {
 
         Optional<Charge> findFirstByTransactionIdAndTenantIdOrderByCreatedAtDesc(Long transactionId,
                                                                                                                                                             Long tenantId);
+
+        Optional<Charge> findFirstByProviderAndProviderChargeIdOrderByCreatedAtDesc(String provider,
+                                                                                   String providerChargeId);
 }

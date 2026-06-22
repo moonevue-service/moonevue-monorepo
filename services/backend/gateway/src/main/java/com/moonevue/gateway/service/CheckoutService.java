@@ -5,6 +5,7 @@ import com.moonevue.core.entity.BankConfiguration;
 import com.moonevue.core.entity.Client;
 import com.moonevue.core.entity.Transaction;
 import com.moonevue.core.entity.TransactionLog;
+import com.moonevue.core.enums.BankType;
 import com.moonevue.core.enums.CheckoutAccessMode;
 import com.moonevue.core.enums.ClientStatus;
 import com.moonevue.core.enums.Severity;
@@ -18,6 +19,7 @@ import com.moonevue.gateway.dto.ChargeResponseDTO;
 import com.moonevue.gateway.dto.CheckoutClientLookupDTO;
 import com.moonevue.gateway.dto.CheckoutInfoDTO;
 import com.moonevue.gateway.dto.CheckoutPayRequest;
+import com.moonevue.gateway.service.bank.ASAAS.AsaasCustomerService;
 import com.moonevue.gateway.service.bank.BankIntegration;
 import com.moonevue.gateway.service.policy.DebtorRequirementPolicy;
 import com.moonevue.gateway.util.ExtraConfigUtils;
@@ -48,6 +50,8 @@ public class CheckoutService {
     private final ClientRepository clientRepository;
     private final CheckoutClientUpsertService checkoutClientUpsertService;
     private final DebtorRequirementPolicy debtorRequirementPolicy;
+    private final ClientBankIntegrationService clientBankIntegrationService;
+    private final AsaasCustomerService asaasCustomerService;
 
     public CheckoutService(JdbcTemplate jdbcTemplate,
                            TransactionRepository transactionRepository,
@@ -56,7 +60,9 @@ public class CheckoutService {
                            ObjectMapper objectMapper,
                            ClientRepository clientRepository,
                            CheckoutClientUpsertService checkoutClientUpsertService,
-                           DebtorRequirementPolicy debtorRequirementPolicy) {
+                           DebtorRequirementPolicy debtorRequirementPolicy,
+                           ClientBankIntegrationService clientBankIntegrationService,
+                           AsaasCustomerService asaasCustomerService) {
         this.jdbcTemplate = jdbcTemplate;
         this.transactionRepository = transactionRepository;
         this.transactionLogRepository = transactionLogRepository;
@@ -65,6 +71,8 @@ public class CheckoutService {
         this.clientRepository = clientRepository;
         this.checkoutClientUpsertService = checkoutClientUpsertService;
         this.debtorRequirementPolicy = debtorRequirementPolicy;
+        this.clientBankIntegrationService = clientBankIntegrationService;
+        this.asaasCustomerService = asaasCustomerService;
     }
 
     @Transactional(readOnly = true)
@@ -199,6 +207,10 @@ public class CheckoutService {
         }
 
         ChargeRequestDTO chargeRequest = buildChargeRequest(tx, req, config.getId(), effectivePixKey);
+
+        if (chargeRequest.bank() == BankType.ASAAS) {
+            chargeRequest = ensureAsaasCustomer(chargeRequest, config, tx, req);
+        }
 
         // Valida o devedor/pagador conforme a política central (provider + tipo de cobrança).
         // Mantém o checkout alinhado às mesmas regras do fluxo direto (PaymentService) e da EFI.
@@ -472,5 +484,139 @@ public class CheckoutService {
         }
 
         return TransactionStatus.PROCESSING;
+    }
+
+    private ChargeRequestDTO ensureAsaasCustomer(ChargeRequestDTO request,
+                                                 BankConfiguration config,
+                                                 Transaction tx,
+                                                 CheckoutPayRequest req) {
+        String customerId = null;
+
+        if (tx.getClient() != null && tx.getClient().getId() != null) {
+            Client client = tx.getClient();
+            customerId = clientBankIntegrationService.findExternalCustomerId(client.getId(), BankType.ASAAS.name(), config.getEnvironment())
+                    .orElseGet(() -> {
+                        String found = asaasCustomerService.findCustomerIdByDocument(config, client.getCpfCnpj());
+                        if (found != null && !found.isBlank()) {
+                            clientBankIntegrationService.ensureIntegration(client, BankType.ASAAS.name(), found, config.getEnvironment());
+                            return found;
+                        }
+                        String created = asaasCustomerService.createCustomer(config, client);
+                        clientBankIntegrationService.ensureIntegration(client, BankType.ASAAS.name(), created, config.getEnvironment());
+                        return created;
+                    });
+        }
+
+        if (customerId == null || customerId.isBlank()) {
+            String document = req.payerDocument() == null ? null : req.payerDocument().replaceAll("[^0-9]", "");
+            if (document == null || (document.length() != 11 && document.length() != 14)) {
+                throw new IllegalArgumentException("Documento do pagador inválido para cobrança ASAAS");
+            }
+
+            String found = asaasCustomerService.findCustomerIdByDocument(config, document);
+            if (found != null && !found.isBlank()) {
+                customerId = found;
+            } else {
+                Client tempClient = new Client();
+                tempClient.setName(req.payerName());
+                tempClient.setCpfCnpj(document);
+                tempClient.setEmail(req.payerEmail());
+                tempClient.setPhone(req.payerPhone());
+                customerId = asaasCustomerService.createCustomer(config, tempClient);
+            }
+        }
+
+        return withAsaasCustomerHint(request, customerId);
+    }
+
+    private ChargeRequestDTO withAsaasCustomerHint(ChargeRequestDTO request, String customerId) {
+        if (customerId == null || customerId.isBlank() || request == null || request.payment() == null) {
+            return request;
+        }
+
+        ChargeRequestDTO.Payment payment = request.payment();
+
+        ChargeRequestDTO.Payment patched = switch (payment.instrument()) {
+            case PIX_IMMEDIATE -> {
+                ChargeRequestDTO.PixImmediate p = payment.pixImmediate();
+                if (p == null) {
+                    yield payment;
+                }
+                yield new ChargeRequestDTO.Payment(
+                        payment.instrument(),
+                        new ChargeRequestDTO.PixImmediate(
+                                p.expiracaoSeconds(),
+                                p.cpf(),
+                                p.cnpj(),
+                                p.nome(),
+                                p.amount(),
+                                p.solicitacaoPagador(),
+                                customerId
+                        ),
+                        payment.pixDue(),
+                        payment.boleto()
+                );
+            }
+            case PIX_DUE -> {
+                ChargeRequestDTO.PixDue p = payment.pixDue();
+                if (p == null) {
+                    yield payment;
+                }
+                yield new ChargeRequestDTO.Payment(
+                        payment.instrument(),
+                        payment.pixImmediate(),
+                        new ChargeRequestDTO.PixDue(
+                                p.txid(),
+                                p.dataDeVencimento(),
+                                p.validadeAposVencimento(),
+                                p.cpf(),
+                                p.cnpj(),
+                                p.nome(),
+                                p.logradouro(),
+                                p.cidade(),
+                                p.uf(),
+                                p.cep(),
+                                p.amountOriginal(),
+                                p.multaPerc(),
+                                p.jurosPerc(),
+                                p.descontoData(),
+                                p.descontoValorPerc(),
+                                p.solicitacaoPagador(),
+                                customerId
+                        ),
+                        payment.boleto()
+                );
+            }
+            case BOLETO -> {
+                ChargeRequestDTO.Boleto b = payment.boleto();
+                if (b == null) {
+                    yield payment;
+                }
+                ChargeRequestDTO.Boleto.Customer c = b.customer();
+                ChargeRequestDTO.Boleto.Customer patchedCustomer = new ChargeRequestDTO.Boleto.Customer(
+                        c != null ? c.name() : null,
+                        customerId,
+                        c != null ? c.email() : null,
+                        c != null ? c.phoneNumber() : null,
+                        c != null ? c.juridicalPerson() : null,
+                        c != null ? c.address() : null
+                );
+
+                yield new ChargeRequestDTO.Payment(
+                        payment.instrument(),
+                        payment.pixImmediate(),
+                        payment.pixDue(),
+                        new ChargeRequestDTO.Boleto(
+                                b.items(),
+                                patchedCustomer,
+                                b.expireAt(),
+                                b.configurations(),
+                                b.message()
+                        )
+                );
+            }
+        };
+
+        return new ChargeRequestDTO(request.bank(), request.bankConfigurationId(), patched);
     }
 }

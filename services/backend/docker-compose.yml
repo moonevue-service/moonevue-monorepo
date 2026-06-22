@@ -104,6 +104,8 @@ services:
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
       STORAGE_CERTS_DIR: ${STORAGE_CERTS_DIR}
       WEBHOOK_HMAC_SECRET: ${WEBHOOK_HMAC_SECRET}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN}
+      ASAAS_WEBHOOK_HEADER: ${ASAAS_WEBHOOK_HEADER:-asaas-access-token}
       TZ: ${TZ}
       MAVEN_OPTS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
     ports:

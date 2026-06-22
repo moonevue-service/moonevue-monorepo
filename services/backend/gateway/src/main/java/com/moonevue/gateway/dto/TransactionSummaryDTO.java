@@ -23,4 +23,6 @@ public record TransactionSummaryDTO(
         String checkoutAccessMode,
         String bank,
         OffsetDateTime createdAt
+        , String boletoInvoiceUrl,
+        String boletoPdfUrl
 ) {}

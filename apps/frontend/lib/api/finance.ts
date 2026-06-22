@@ -38,7 +38,6 @@ export interface BankAccountResponse {
 
 export interface BankConfigurationRequest {
   environment: Environment;
-  webhookUrl: string;
   isActive?: boolean;
   extraConfig?: Record<string, any>;
 }
@@ -61,7 +60,6 @@ export interface CertificateUploadResponse {
 
 export interface BankConfigurationUpdateRequest {
   isActive?: boolean;
-  webhookUrl?: string;
   extraConfig?: Record<string, any>;
 }
 

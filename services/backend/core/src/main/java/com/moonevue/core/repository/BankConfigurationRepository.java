@@ -1,6 +1,7 @@
 package com.moonevue.core.repository;
 
 import com.moonevue.core.entity.BankConfiguration;
+import com.moonevue.core.enums.BankType;
 import com.moonevue.core.enums.Environment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,4 +26,12 @@ public interface BankConfigurationRepository extends JpaRepository<BankConfigura
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update BankConfiguration b set b.isActive = :active where b.id = :id")
     int setActive(@Param("id") Long id, @Param("active") boolean active);
+
+        @Query("""
+                        select b from BankConfiguration b
+                        join fetch b.bankAccount ba
+                        where ba.bank = :bankType
+                            and b.isActive = true
+                        """)
+        List<BankConfiguration> findActiveByBankType(@Param("bankType") BankType bankType);
 }

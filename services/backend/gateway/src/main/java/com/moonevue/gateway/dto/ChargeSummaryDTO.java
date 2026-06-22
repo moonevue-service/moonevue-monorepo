@@ -13,6 +13,8 @@ public record ChargeSummaryDTO(
         BigDecimal amountPaid,
         String pixCopyPaste,
         String boletoLine,
+        String boletoInvoiceUrl,
+        String boletoPdfUrl,
         OffsetDateTime createdAt
 ) {
 }

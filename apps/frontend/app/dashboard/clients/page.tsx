@@ -24,6 +24,79 @@ const { Title, Text } = Typography;
 
 type ClientFormValues = ClientUpsertRequest;
 
+function onlyDigits(value?: string): string {
+  return (value ?? '').replace(/\D/g, '');
+}
+
+function formatCpfCnpj(value?: string): string {
+  const digits = onlyDigits(value).slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+}
+
+function formatPhoneBr(value?: string): string {
+  const digits = onlyDigits(value).slice(0, 11);
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d{1,4})$/, '$1-$2');
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+}
+
+function isValidCpf(cpf: string): boolean {
+  if (cpf.length !== 11 || /^([0-9])\1+$/.test(cpf)) return false;
+  const calc = (base: string, factor: number) => {
+    let total = 0;
+    for (let i = 0; i < base.length; i++) total += Number(base[i]) * (factor - i);
+    const mod = 11 - (total % 11);
+    return mod > 9 ? 0 : mod;
+  };
+  const d1 = calc(cpf.slice(0, 9), 10);
+  const d2 = calc(cpf.slice(0, 9) + d1, 11);
+  return cpf === cpf.slice(0, 9) + String(d1) + String(d2);
+}
+
+function isValidCnpj(cnpj: string): boolean {
+  if (cnpj.length !== 14 || /^([0-9])\1+$/.test(cnpj)) return false;
+  const calc = (base: string, weights: number[]) => {
+    const total = base.split('').reduce((sum, n, i) => sum + Number(n) * weights[i], 0);
+    const mod = total % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+  const d1 = calc(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const d2 = calc(cnpj.slice(0, 12) + d1, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return cnpj === cnpj.slice(0, 12) + String(d1) + String(d2);
+}
+
+function isValidDocument(value?: string): boolean {
+  const digits = onlyDigits(value);
+  if (digits.length === 11) return isValidCpf(digits);
+  if (digits.length === 14) return isValidCnpj(digits);
+  return false;
+}
+
+function isValidPhone(value?: string): boolean {
+  const digits = onlyDigits(value);
+  if (!(digits.length === 10 || digits.length === 11)) return false;
+  if (/^([0-9])\1+$/.test(digits)) return false;
+  const ddd = Number(digits.slice(0, 2));
+  if (ddd < 11 || ddd > 99) return false;
+  if (digits.length === 11 && digits[2] !== '9') return false;
+  return true;
+}
+
 export default function ClientsPage() {
   const { message } = App.useApp();
   const { user } = useAuth();
@@ -91,9 +164,9 @@ export default function ClientsPage() {
     setEditingClient(client);
     form.setFieldsValue({
       name: client.name,
-      cpfCnpj: client.cpfCnpj,
+      cpfCnpj: formatCpfCnpj(client.cpfCnpj),
       email: client.email,
-      phone: client.phone,
+      phone: formatPhoneBr(client.phone),
     });
     setModalOpen(true);
   };
@@ -101,10 +174,16 @@ export default function ClientsPage() {
   const handleUpsertClient = async (values: ClientFormValues) => {
     setSubmitting(true);
     try {
+      const payload: ClientUpsertRequest = {
+        name: values.name.trim(),
+        cpfCnpj: onlyDigits(values.cpfCnpj),
+        email: values.email.trim().toLowerCase(),
+        phone: values.phone ? onlyDigits(values.phone) : undefined,
+      };
       if (editingClient) {
-        await ClientsApi.update(editingClient.id, values);
+        await ClientsApi.update(editingClient.id, payload);
       } else {
-        await ClientsApi.create(values);
+        await ClientsApi.create(payload);
       }
       setModalOpen(false);
       setEditingClient(null);
@@ -158,7 +237,13 @@ export default function ClientsPage() {
         </Button>
       ),
     },
-    { title: 'Documento', dataIndex: 'cpfCnpj', key: 'cpfCnpj', width: 160 },
+    {
+      title: 'Documento',
+      dataIndex: 'cpfCnpj',
+      key: 'cpfCnpj',
+      width: 180,
+      render: (value: string) => formatCpfCnpj(value),
+    },
     { title: 'E-mail', dataIndex: 'email', key: 'email' },
     {
       title: 'Status',
@@ -284,17 +369,63 @@ export default function ClientsPage() {
         destroyOnClose
       >
         <Form form={form} layout="vertical" onFinish={handleUpsertClient}>
-          <Form.Item label="Nome" name="name" rules={[{ required: true, message: 'Informe o nome' }]}>
-            <Input />
+          <Form.Item
+            label="Nome"
+            name="name"
+            rules={[
+              { required: true, message: 'Informe o nome' },
+              { max: 120, message: 'Máximo de 120 caracteres' },
+            ]}
+          >
+            <Input maxLength={120} />
           </Form.Item>
-          <Form.Item label="CPF/CNPJ" name="cpfCnpj" rules={[{ required: true, message: 'Informe o documento' }]}>
-            <Input />
+          <Form.Item
+            label="CPF/CNPJ"
+            name="cpfCnpj"
+            rules={[
+              { required: true, message: 'Informe o documento' },
+              {
+                validator: async (_, value) => {
+                  if (!value || isValidDocument(value)) return;
+                  throw new Error('CPF/CNPJ inválido');
+                },
+              },
+            ]}
+          >
+            <Input
+              maxLength={18}
+              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              onChange={(e) => form.setFieldValue('cpfCnpj', formatCpfCnpj(e.target.value))}
+            />
           </Form.Item>
-          <Form.Item label="E-mail" name="email" rules={[{ required: true, message: 'Informe o e-mail' }]}>
-            <Input />
+          <Form.Item
+            label="E-mail"
+            name="email"
+            rules={[
+              { required: true, message: 'Informe o e-mail' },
+              { type: 'email', message: 'E-mail inválido' },
+              { max: 180, message: 'Máximo de 180 caracteres' },
+            ]}
+          >
+            <Input maxLength={180} />
           </Form.Item>
-          <Form.Item label="Telefone" name="phone">
-            <Input />
+          <Form.Item
+            label="Telefone"
+            name="phone"
+            rules={[
+              {
+                validator: async (_, value) => {
+                  if (!value || isValidPhone(value)) return;
+                  throw new Error('Telefone inválido. Ex: (63) 99999-9999');
+                },
+              },
+            ]}
+          >
+            <Input
+              maxLength={15}
+              placeholder="(63) 99999-9999"
+              onChange={(e) => form.setFieldValue('phone', formatPhoneBr(e.target.value))}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -311,9 +442,9 @@ export default function ClientsPage() {
         {selectedClient && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Space direction="vertical" size={2}>
-              <Text><strong>Documento:</strong> {selectedClient.cpfCnpj}</Text>
+              <Text><strong>Documento:</strong> {formatCpfCnpj(selectedClient.cpfCnpj)}</Text>
               <Text><strong>E-mail:</strong> {selectedClient.email}</Text>
-              <Text><strong>Telefone:</strong> {selectedClient.phone || '-'}</Text>
+              <Text><strong>Telefone:</strong> {selectedClient.phone ? formatPhoneBr(selectedClient.phone) : '-'}</Text>
             </Space>
 
             <Title level={5} style={{ marginBottom: 0 }}>Histórico de transações</Title>

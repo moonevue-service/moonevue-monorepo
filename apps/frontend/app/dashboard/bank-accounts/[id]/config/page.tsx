@@ -52,7 +52,6 @@ const { Option } = Select;
 // EFI extraConfig shape used in the form
 interface EfiFormValues {
   environment: Environment;
-  webhookUrl?: string;
   isActive: boolean;
   // PIX namespace
   pix_client_id: string;
@@ -102,7 +101,6 @@ function extraConfigToFormValues(
   const charges = (cfg.extraConfig?.charges ?? {}) as Record<string, string>;
   return {
     environment: cfg.environment,
-    webhookUrl: cfg.webhookUrl ?? '',
     isActive: cfg.isActive ?? true,
     pix_client_id: pix.client_id ?? '',
     pix_client_secret: pix.client_secret ?? '',
@@ -121,10 +119,9 @@ function extraConfigToFormValues(
 // ASAAS extraConfig shape used in the form
 interface AsaasFormValues {
   environment: Environment;
-  webhookUrl?: string;
   isActive: boolean;
   asaas_access_token: string;
-  asaas_customer?: string;
+  asaas_webhook_token?: string;
   asaas_baseUrl?: string;
 }
 
@@ -132,7 +129,7 @@ function asaasFormValuesToExtraConfig(v: AsaasFormValues): Record<string, any> {
   const asaas: Record<string, string> = {
     access_token: v.asaas_access_token,
   };
-  if (v.asaas_customer) asaas.customer = v.asaas_customer;
+  if (v.asaas_webhook_token) asaas.webhook_token = v.asaas_webhook_token;
   if (v.asaas_baseUrl) asaas.baseUrl = v.asaas_baseUrl;
   return { asaas };
 }
@@ -143,10 +140,9 @@ function asaasExtraConfigToFormValues(
   const asaas = (cfg.extraConfig?.asaas ?? {}) as Record<string, string>;
   return {
     environment: cfg.environment,
-    webhookUrl: cfg.webhookUrl ?? '',
     isActive: cfg.isActive ?? true,
     asaas_access_token: asaas.access_token ?? '',
-    asaas_customer: asaas.customer ?? '',
+    asaas_webhook_token: asaas.webhook_token ?? '',
     asaas_baseUrl: asaas.baseUrl ?? '',
   };
 }
@@ -323,14 +319,13 @@ function ConfigModal({
           tenantId,
           bankAccountId,
           editing.id,
-          { webhookUrl: values.webhookUrl ?? "", isActive: values.isActive, extraConfig }
+          { isActive: values.isActive, extraConfig }
         );
         message.success('Configuração atualizada');
         onSuccess(res);
       } else {
         const req: BankConfigurationRequest = {
           environment: values.environment,
-          webhookUrl: values.webhookUrl ?? "",
           isActive: values.isActive,
           extraConfig,
         };
@@ -387,10 +382,6 @@ function ConfigModal({
           </Col>
         </Row>
 
-        <Form.Item name="webhookUrl" label="URL de Webhook (pagamento recebido)">
-          <Input placeholder="https://meu-site.com/webhooks/pagamento" />
-        </Form.Item>
-
         {isAsaas ? (
           <>
             <Divider style={{ fontSize: 13 }}>ASAAS — Credenciais</Divider>
@@ -411,11 +402,11 @@ function ConfigModal({
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  name="asaas_customer"
-                  label="Customer padrão (opcional)"
-                  tooltip="Identificador do cliente ASAAS (cus_...) usado quando a cobrança não informar um."
+                  name="asaas_webhook_token"
+                  label="Token do Webhook (por ambiente)"
+                  tooltip="Token que o ASAAS enviará no header do webhook para este ambiente."
                 >
-                  <Input placeholder="cus_000000000000" />
+                  <Input.Password placeholder="token-webhook-asaas" />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -626,7 +617,7 @@ export default function BankConfigPage() {
           </Title>
           <Text type="secondary">
             {isAsaas
-              ? 'Gerencie a API Key (access_token), ambiente e webhook para integração com a ASAAS.'
+              ? 'Gerencie a API Key (access_token), ambiente e configurações internas da integração ASAAS.'
               : 'Gerencie credenciais, ambiente e certificado mTLS para integração com a Efí Pay.'}
           </Text>
         </div>
@@ -679,11 +670,6 @@ export default function BankConfigPage() {
                       {cfg.isActive ? 'Ativo' : 'Inativo'}
                     </Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="Webhook">
-                    <Text copyable={!!cfg.webhookUrl} style={{ fontSize: 12 }}>
-                      {cfg.webhookUrl || <Text type="secondary">não configurado</Text>}
-                    </Text>
-                  </Descriptions.Item>
                   {isAsaas ? (
                     <>
                       <Descriptions.Item label="API Key">
@@ -696,17 +682,20 @@ export default function BankConfigPage() {
                           )}
                         </Text>
                       </Descriptions.Item>
-                      <Descriptions.Item label="Customer padrão">
-                        <Text style={{ fontSize: 12 }}>
-                          {(cfg.extraConfig?.asaas as any)?.customer || (
-                            <Text type="secondary">não configurado</Text>
-                          )}
-                        </Text>
-                      </Descriptions.Item>
                       <Descriptions.Item label="Base URL">
                         <Text style={{ fontSize: 12 }}>
                           {(cfg.extraConfig?.asaas as any)?.baseUrl || (
                             <Text type="secondary">padrão (sandbox/produção)</Text>
+                          )}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Token Webhook">
+                        <Text style={{ fontSize: 12 }}>
+                          {(cfg.extraConfig?.asaas as any)?.webhook_token ? (
+                            '••••••••' +
+                            String((cfg.extraConfig.asaas as any).webhook_token).slice(-4)
+                          ) : (
+                            <Text type="secondary">não configurado (usa token global)</Text>
                           )}
                         </Text>
                       </Descriptions.Item>

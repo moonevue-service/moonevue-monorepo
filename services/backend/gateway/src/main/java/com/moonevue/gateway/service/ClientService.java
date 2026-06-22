@@ -79,14 +79,113 @@ public class ClientService {
     }
 
     private void applyUpsert(Client client, ClientUpsertRequest request) {
-        client.setName(request.name().trim());
-        client.setCpfCnpj(normalizeDocument(request.cpfCnpj()));
-        client.setEmail(request.email().trim().toLowerCase());
-        client.setPhone(request.phone() == null ? null : request.phone().trim());
+        String name = request.name() == null ? null : request.name().trim();
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Nome do cliente é obrigatório");
+        }
+
+        String document = normalizeDocument(request.cpfCnpj());
+        if (!isValidCpfOrCnpj(document)) {
+            throw new IllegalArgumentException("CPF/CNPJ inválido");
+        }
+
+        String email = request.email() == null ? null : request.email().trim().toLowerCase();
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("E-mail é obrigatório");
+        }
+
+        String phone = normalizePhone(request.phone());
+        if (phone != null && !isValidBrazilianPhone(phone)) {
+            throw new IllegalArgumentException("Telefone inválido. Use DDD + número (10 ou 11 dígitos)");
+        }
+
+        client.setName(name);
+        client.setCpfCnpj(document);
+        client.setEmail(email);
+        client.setPhone(phone);
     }
 
     private String normalizeDocument(String document) {
         return document == null ? null : document.replaceAll("[^0-9]", "");
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        String digits = phone.replaceAll("[^0-9]", "");
+        return digits.isBlank() ? null : digits;
+    }
+
+    private boolean isValidCpfOrCnpj(String document) {
+        if (document == null) {
+            return false;
+        }
+        if (document.length() == 11) {
+            return isValidCpf(document);
+        }
+        if (document.length() == 14) {
+            return isValidCnpj(document);
+        }
+        return false;
+    }
+
+    private boolean isValidCpf(String cpf) {
+        if (cpf == null || cpf.length() != 11 || cpf.chars().distinct().count() == 1) {
+            return false;
+        }
+
+        int d1 = cpfDigit(cpf.substring(0, 9), 10);
+        int d2 = cpfDigit(cpf.substring(0, 9) + d1, 11);
+        return cpf.equals(cpf.substring(0, 9) + d1 + d2);
+    }
+
+    private int cpfDigit(String base, int weightStart) {
+        int sum = 0;
+        for (int i = 0; i < base.length(); i++) {
+            sum += (base.charAt(i) - '0') * (weightStart - i);
+        }
+        int mod = 11 - (sum % 11);
+        return mod > 9 ? 0 : mod;
+    }
+
+    private boolean isValidCnpj(String cnpj) {
+        if (cnpj == null || cnpj.length() != 14 || cnpj.chars().distinct().count() == 1) {
+            return false;
+        }
+
+        int d1 = cnpjDigit(cnpj.substring(0, 12), new int[]{5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2});
+        int d2 = cnpjDigit(cnpj.substring(0, 12) + d1, new int[]{6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2});
+        return cnpj.equals(cnpj.substring(0, 12) + d1 + d2);
+    }
+
+    private int cnpjDigit(String base, int[] weights) {
+        int sum = 0;
+        for (int i = 0; i < base.length(); i++) {
+            sum += (base.charAt(i) - '0') * weights[i];
+        }
+        int mod = sum % 11;
+        return mod < 2 ? 0 : 11 - mod;
+    }
+
+    private boolean isValidBrazilianPhone(String phone) {
+        if (phone == null || (phone.length() != 10 && phone.length() != 11)) {
+            return false;
+        }
+        if (phone.chars().distinct().count() == 1) {
+            return false;
+        }
+
+        int ddd = Integer.parseInt(phone.substring(0, 2));
+        if (ddd < 11 || ddd > 99) {
+            return false;
+        }
+
+        if (phone.length() == 11) {
+            // Celular no padrão brasileiro: nono dígito obrigatório.
+            return phone.charAt(2) == '9';
+        }
+        return true;
     }
 
     private ClientSummaryDTO toSummary(Client client) {
@@ -117,7 +216,9 @@ public class ClientService {
                 t.getClient() != null ? t.getClient().getName() : null,
                 t.getCheckoutAccessMode() != null ? t.getCheckoutAccessMode().name() : null,
                 t.getBankAccount().getBank() != null ? t.getBankAccount().getBank().name() : null,
-                t.getCreatedAt()
+                t.getCreatedAt(),
+                null,
+                null
         );
     }
 }
