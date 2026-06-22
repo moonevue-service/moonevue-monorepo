@@ -35,6 +35,9 @@ spring:
 
 moonevue:
   gateway:
+    api-keys:
+      pepper: ${API_KEY_PEPPER:moonevue-dev-pepper-change-me}
+      rate-limit-per-minute: ${API_KEY_RATE_LIMIT_PER_MINUTE:120}
     webhooks:
       hmac:
         secret: ${WEBHOOK_HMAC_SECRET}
@@ -57,6 +60,7 @@ banks:
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
 
 # Perfil docker (ativado via SPRING_PROFILES_ACTIVE=docker no docker-compose)
 ---

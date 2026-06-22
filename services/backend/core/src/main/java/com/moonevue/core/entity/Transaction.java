@@ -93,6 +93,12 @@ public class Transaction {
     @Column(name = "checkout_instrument", length = 30)
     private String checkoutInstrument;
 
+    @Column(name = "source_channel", length = 30)
+    private String sourceChannel = "INTERNAL_PANEL";
+
+    @Column(name = "api_key_id")
+    private Long apiKeyId;
+
         @Enumerated(EnumType.STRING)
         @Column(name = "checkout_access_mode", length = 30)
         private CheckoutAccessMode checkoutAccessMode = CheckoutAccessMode.PUBLIC;

@@ -2,5 +2,144 @@
 
 /* Responsive helpers for auth pages */
 @media (max-width: 1023px) {
-  .auth-marketing { display: none !important; }
+  .auth-marketing {
+    display: none !important;
+  }
+}
+
+/* Documentation page: fixed header/tabs, only the content area scrolls */
+.docs-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.docs-tabs > .ant-tabs-nav {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+.docs-tabs > .ant-tabs-content-holder {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Esconde a barra de rolagem mantendo a rolagem funcional */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.docs-tabs > .ant-tabs-content-holder::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Edge */
+}
+.docs-tabs .ant-tabs-content {
+  height: 100%;
+}
+
+/* ── Landing page (home) animations ───────────────────────────────── */
+@keyframes mv-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes mv-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes mv-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes mv-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mv-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+.mv-caret {
+  display: inline-block;
+  width: 3px;
+  height: 0.92em;
+  margin-left: 5px;
+  vertical-align: -2px;
+  background: currentColor;
+  border-radius: 1px;
+  animation: mv-blink 1s step-end infinite;
+}
+.mv-fade-up {
+  opacity: 0;
+  animation: mv-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.mv-float {
+  animation: mv-float 6s ease-in-out infinite;
+}
+.mv-marquee-mask {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 12%,
+    #000 88%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 12%,
+    #000 88%,
+    transparent
+  );
+}
+.mv-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: mv-marquee 24s linear infinite;
+  will-change: transform;
+}
+.mv-marquee-mask:hover .mv-marquee-track {
+  animation-play-state: paused;
+}
+.mv-draw-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mv-draw 1.5s ease forwards 0.25s;
+}
+.mv-card-hover {
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.mv-card-hover:hover {
+  transform: translateY(-4px);
+  border-color: #d4d4d4;
+  box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.25);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mv-fade-up,
+  .mv-float,
+  .mv-draw-line {
+    animation: none;
+    opacity: 1;
+  }
 }

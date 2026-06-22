@@ -28,7 +28,7 @@ public class SessionValidationFilter extends OncePerRequestFilter {
     private final String cookieName;
 
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/webhooks/", "/actuator/", "/swagger-ui", "/v3/api-docs", "/checkout/"
+            "/webhooks/", "/actuator/", "/swagger-ui", "/v3/api-docs", "/checkout/", "/api/v1/"
     );
 
     @Override

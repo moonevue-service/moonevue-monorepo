@@ -218,7 +218,9 @@ public class ClientService {
                 t.getBankAccount().getBank() != null ? t.getBankAccount().getBank().name() : null,
                 t.getCreatedAt(),
                 null,
-                null
+                null,
+                t.getBankConfiguration() != null && t.getBankConfiguration().getEnvironment() != null
+                        ? t.getBankConfiguration().getEnvironment().name() : null
         );
     }
 }

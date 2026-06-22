@@ -1,12 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useTransition } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { Avatar, Button, Dropdown, Flex, Layout, Menu, Spin, theme, Typography } from 'antd';
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
+import {
+  Avatar,
+  Button,
+  Dropdown,
+  Flex,
+  Layout,
+  Menu,
+  Spin,
+  theme,
+  Typography,
+} from "antd";
 import {
   AppstoreOutlined,
+  ApiOutlined,
   BankOutlined,
+  BookOutlined,
   LineChartOutlined,
   LoadingOutlined,
   LogoutOutlined,
@@ -16,23 +28,57 @@ import {
   SwapOutlined,
   TeamOutlined,
   UserOutlined,
-} from '@ant-design/icons';
-import { useAuth } from '@/app/providers';
-import { ProtectedRoute } from '@/app/protected-route';
-import { canAccessClients, canManageEmployees } from '@/lib/authz';
-import { dmSerifDisplay } from '@/app/ui/fonts';
+} from "@ant-design/icons";
+import { useAuth } from "@/app/providers";
+import { ProtectedRoute } from "@/app/protected-route";
+import {
+  canAccessClients,
+  canManageEmployees,
+  canManageIntegrations,
+} from "@/lib/authz";
+import { dmSerifDisplay } from "@/app/ui/fonts";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
 const baseNavItems = [
-  { key: '/dashboard', label: 'Visão Geral', icon: <AppstoreOutlined /> },
-  { key: '/dashboard/analytics', label: 'Analytics', icon: <LineChartOutlined /> },
-  { key: '/dashboard/bank-accounts', label: 'Contas Bancárias', icon: <BankOutlined /> },
-  { key: '/dashboard/clients', label: 'Clientes', icon: <UserOutlined /> },
-  { key: '/dashboard/employees', label: 'Funcionários', icon: <TeamOutlined /> },
-  { key: '/dashboard/transactions', label: 'Transações', icon: <SwapOutlined /> },
-  { key: '/dashboard/settings', label: 'Configurações', icon: <SettingOutlined /> },
+  { key: "/dashboard", label: "Visão Geral", icon: <AppstoreOutlined /> },
+  {
+    key: "/dashboard/analytics",
+    label: "Analytics",
+    icon: <LineChartOutlined />,
+  },
+  {
+    key: "/dashboard/bank-accounts",
+    label: "Contas Bancárias",
+    icon: <BankOutlined />,
+  },
+  { key: "/dashboard/clients", label: "Clientes", icon: <UserOutlined /> },
+  {
+    key: "/dashboard/employees",
+    label: "Funcionários",
+    icon: <TeamOutlined />,
+  },
+  {
+    key: "/dashboard/transactions",
+    label: "Transações",
+    icon: <SwapOutlined />,
+  },
+  {
+    key: "/dashboard/integrations",
+    label: "Integrações",
+    icon: <ApiOutlined />,
+  },
+  {
+    key: "/dashboard/docs",
+    label: "Documentação",
+    icon: <BookOutlined />,
+  },
+  {
+    key: "/dashboard/settings",
+    label: "Configurações",
+    icon: <SettingOutlined />,
+  },
 ];
 
 function SidebarContent({
@@ -59,7 +105,11 @@ function SidebarContent({
         <Link
           href="/dashboard"
           className={dmSerifDisplay.className}
-          style={{ color: token.colorPrimary, fontSize: 22, textDecoration: 'none' }}
+          style={{
+            color: token.colorPrimary,
+            fontSize: 22,
+            textDecoration: "none",
+          }}
         >
           MOONEVUE
         </Link>
@@ -68,14 +118,18 @@ function SidebarContent({
         mode="inline"
         selectedKeys={[selectedKey]}
         items={navItems}
-        style={{ border: 'none', marginTop: 8, flex: 1 }}
+        style={{ border: "none", marginTop: 8, flex: 1 }}
         onClick={({ key }) => onNavigate(key)}
       />
     </>
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -89,12 +143,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname]);
 
   const navItems = baseNavItems.filter((item) => {
-    if (item.key === '/dashboard/clients') {
+    if (item.key === "/dashboard/clients") {
       return canAccessClients(user?.roles, user?.permissions);
     }
 
-    if (item.key === '/dashboard/employees') {
+    if (item.key === "/dashboard/employees") {
       return canManageEmployees(user?.roles, user?.permissions);
+    }
+
+    if (item.key === "/dashboard/integrations") {
+      return canManageIntegrations(user?.roles, user?.permissions);
     }
 
     return true;
@@ -104,7 +162,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     try {
       await logout();
     } finally {
-      router.push('/login');
+      router.push("/login");
     }
   };
 
@@ -116,29 +174,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const userMenu = {
     items: [
-      { key: 'email', label: <Text type="secondary" style={{ fontSize: 12 }}>{user?.email}</Text>, disabled: true },
-      { type: 'divider' as const },
-      { key: 'logout', label: 'Sair', icon: <LogoutOutlined />, danger: true },
+      {
+        key: "email",
+        label: (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {user?.email}
+          </Text>
+        ),
+        disabled: true,
+      },
+      { type: "divider" as const },
+      { key: "logout", label: "Sair", icon: <LogoutOutlined />, danger: true },
     ],
-    onClick: ({ key }: { key: string }) => key === 'logout' && handleLogout(),
+    onClick: ({ key }: { key: string }) => key === "logout" && handleLogout(),
   };
 
   const headerStyle: React.CSSProperties = {
-    position: 'sticky',
+    position: "sticky",
     top: 0,
     zIndex: 10,
-    background: '#fff',
+    background: "#fff",
     borderBottom: `1px solid ${token.colorBorderSecondary}`,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 24px',
+    display: "flex",
+    alignItems: "center",
+    padding: "0 24px",
     gap: 12,
     height: 64,
   };
 
   return (
     <ProtectedRoute>
-      <Layout style={{ minHeight: '100vh' }}>
+      <Layout style={{ minHeight: "100vh" }}>
         {/* Desktop sidebar */}
         <Sider
           collapsible
@@ -146,20 +212,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           trigger={null}
           width={220}
           style={{
-            background: '#fff',
+            background: "#fff",
             borderRight: `1px solid ${token.colorBorderSecondary}`,
-            overflow: 'auto',
-            height: '100vh',
-            position: 'sticky',
+            overflow: "auto",
+            height: "100vh",
+            position: "sticky",
             top: 0,
-            display: 'flex',
-            flexDirection: 'column',
+            display: "flex",
+            flexDirection: "column",
           }}
           breakpoint="md"
           collapsedWidth={0}
           onBreakpoint={(broken) => setCollapsed(broken)}
         >
-          <SidebarContent selectedKey={selectedKey} navItems={navItems} onNavigate={handleNavigate} />
+          <SidebarContent
+            selectedKey={selectedKey}
+            navItems={navItems}
+            onNavigate={handleNavigate}
+          />
         </Sider>
 
         <Layout>
@@ -173,7 +243,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div style={{ flex: 1 }} />
 
             <Dropdown menu={userMenu} placement="bottomRight">
-              <Flex align="center" gap={8} style={{ cursor: 'pointer' }}>
+              <Flex align="center" gap={8} style={{ cursor: "pointer" }}>
                 <Avatar
                   size="small"
                   icon={<UserOutlined />}
@@ -194,19 +264,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             style={{
               padding: 24,
               background: token.colorBgLayout,
-              minHeight: 'calc(100vh - 64px)',
+              minHeight: "calc(100vh - 64px)",
             }}
           >
-            <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ maxWidth: 1200, margin: "0 auto" }}>
               {isPending ? (
                 <Flex
                   vertical
                   align="center"
                   justify="center"
                   gap={16}
-                  style={{ minHeight: 'calc(100vh - 160px)' }}
+                  style={{ minHeight: "calc(100vh - 160px)" }}
                 >
-                  <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />} />
+                  <Spin
+                    indicator={
+                      <LoadingOutlined style={{ fontSize: 32 }} spin />
+                    }
+                  />
                   <Text type="secondary">Carregando…</Text>
                 </Flex>
               ) : (
@@ -219,7 +293,3 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </ProtectedRoute>
   );
 }
-
-
-
-

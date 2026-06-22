@@ -1,14 +1,14 @@
-import { ApiClient } from './client';
+import { ApiClient } from "./client";
 
 export enum PaymentBankType {
-  EFI = 'EFI',
-  ASAAS = 'ASAAS',
+  EFI = "EFI",
+  ASAAS = "ASAAS",
 }
 
 export enum TransactionStatus {
-  PENDING = 'PENDING',
-  CONFIRMED = 'CONFIRMED',
-  FAILED = 'FAILED',
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  FAILED = "FAILED",
 }
 
 export interface ChargeRequestDTO {
@@ -19,19 +19,19 @@ export interface ChargeRequestDTO {
 
 export type PaymentPayload =
   | {
-      instrument: 'PIX_IMMEDIATE';
+      instrument: "PIX_IMMEDIATE";
       pixImmediate: PixImmediatePayment;
       pixDue?: null;
       boleto?: null;
     }
   | {
-      instrument: 'PIX_DUE';
+      instrument: "PIX_DUE";
       pixImmediate?: null;
       pixDue: PixDuePayment;
       boleto?: null;
     }
   | {
-      instrument: 'BOLETO';
+      instrument: "BOLETO";
       pixImmediate?: null;
       pixDue?: null;
       boleto: BoletoPayment;
@@ -114,6 +114,7 @@ export interface ChargeResponseDTO {
   dueDate?: string;
   expiracao?: number;
   pixCopiaECola?: string;
+  pixQrCodeImage?: string;
   chave?: string;
   barcode?: string;
   link?: string;
@@ -125,9 +126,9 @@ export interface CreateCheckoutTransactionRequest {
   bankConfigurationId: number;
   amount: number;
   description: string;
-  instrument: PaymentPayload['instrument'];
+  instrument: PaymentPayload["instrument"];
   clientId?: number;
-  checkoutAccessMode?: 'PUBLIC' | 'CLIENT_DOCUMENT' | 'CLIENT_LOGIN';
+  checkoutAccessMode?: "PUBLIC" | "CLIENT_DOCUMENT" | "CLIENT_LOGIN";
   pixKey?: string;
   expiresInHours?: number;
 }
@@ -150,6 +151,7 @@ export interface TransactionSummary {
   createdAt: string;
   boletoInvoiceUrl?: string;
   boletoPdfUrl?: string;
+  environment?: "SANDBOX" | "PRODUCTION";
 }
 
 export interface PageResponse<T> {
@@ -163,33 +165,33 @@ export interface PageResponse<T> {
 export const PaymentApi = {
   listTransactions: (params?: { page?: number; size?: number }) =>
     ApiClient.get<PageResponse<TransactionSummary>>(
-      `/payments?page=${params?.page ?? 0}&size=${params?.size ?? 50}`
+      `/payments?page=${params?.page ?? 0}&size=${params?.size ?? 50}`,
     ),
 
   createPayment: (data: ChargeRequestDTO) =>
-    ApiClient.post<ChargeResponseDTO>('/payments', data),
+    ApiClient.post<ChargeResponseDTO>("/payments", data),
 
   createCheckoutDraft: (data: CreateCheckoutTransactionRequest) =>
-    ApiClient.post<TransactionSummary>('/payments/checkout', data),
+    ApiClient.post<TransactionSummary>("/payments/checkout", data),
 
   createPixImmediate: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
     clientId?: number;
     payment: PixImmediatePayment;
-  }) => ApiClient.post<ChargeResponseDTO>('/payments/pix/immediate', data),
+  }) => ApiClient.post<ChargeResponseDTO>("/payments/pix/immediate", data),
 
   createPixDue: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
     clientId?: number;
     payment: PixDuePayment;
-  }) => ApiClient.post<ChargeResponseDTO>('/payments/pix/due', data),
+  }) => ApiClient.post<ChargeResponseDTO>("/payments/pix/due", data),
 
   createBoleto: (data: {
     bank: PaymentBankType;
     bankConfigurationId: number;
     clientId?: number;
     payment: BoletoPayment;
-  }) => ApiClient.post<ChargeResponseDTO>('/payments/boleto', data),
+  }) => ApiClient.post<ChargeResponseDTO>("/payments/boleto", data),
 };

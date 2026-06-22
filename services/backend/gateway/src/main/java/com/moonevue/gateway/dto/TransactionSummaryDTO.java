@@ -24,5 +24,6 @@ public record TransactionSummaryDTO(
         String bank,
         OffsetDateTime createdAt
         , String boletoInvoiceUrl,
-        String boletoPdfUrl
+        String boletoPdfUrl,
+        String environment
 ) {}

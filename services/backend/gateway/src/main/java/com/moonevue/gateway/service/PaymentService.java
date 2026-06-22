@@ -102,11 +102,11 @@ public class PaymentService {
                     t.getClient() != null ? t.getClient().getName() : null,
                     t.getCheckoutAccessMode() != null ? t.getCheckoutAccessMode().name() : null,
                     t.getBankAccount().getBank() != null ? t.getBankAccount().getBank().name() : null,
-                    tx.getCreatedAt(),
-                    null,
-                    null
+                    t.getCreatedAt(),
                     boletoLinks[0],
-                    boletoLinks[1]
+                    boletoLinks[1],
+                    t.getBankConfiguration() != null && t.getBankConfiguration().getEnvironment() != null
+                        ? t.getBankConfiguration().getEnvironment().name() : null
                 );
             });
     }
@@ -167,23 +167,11 @@ public class PaymentService {
             tx.getClient() != null ? tx.getClient().getName() : null,
             tx.getCheckoutAccessMode() != null ? tx.getCheckoutAccessMode().name() : null,
             tx.getBankAccount().getBank() != null ? tx.getBankAccount().getBank().name() : null,
-            tx.getCreatedAt()
+            tx.getCreatedAt(),
+            null,
+            null,
+            config.getEnvironment() != null ? config.getEnvironment().name() : null
         );
-@@
-            .map(c -> new ChargeSummaryDTO(
-                c.getId(),
-                c.getProvider(),
-                c.getProviderChargeId(),
-                c.getPaymentMethod(),
-                c.getStatus(),
-                c.getAmountTotal(),
-                c.getAmountPaid(),
-                c.getPixCopyPaste(),
-                c.getBoletoLine(),
-                c.getCreatedAt(),
-                c.getPixQrCodeRef(),
-                c.getBoletoPdfRef()
-            ))
     }
 
         @Transactional(readOnly = true)
@@ -203,6 +191,8 @@ public class PaymentService {
                 c.getAmountPaid(),
                 c.getPixCopyPaste(),
                 c.getBoletoLine(),
+                c.getPixQrCodeRef(),
+                c.getBoletoPdfRef(),
                 c.getCreatedAt()
             ))
             .toList();
@@ -210,6 +200,11 @@ public class PaymentService {
 
     @Transactional
     public ChargeResponseDTO createCharge(Long tenantId, ChargeRequestDTO request, Long clientId) {
+        return createCharge(tenantId, request, clientId, null);
+    }
+
+    @Transactional
+    public ChargeResponseDTO createCharge(Long tenantId, ChargeRequestDTO request, Long clientId, Long apiKeyId) {
         Long bankConfigurationId = request.bankConfigurationId();
         BankIntegration integration = factory.getIntegration(request.bank());
         BankConfiguration config = bankConfigurationRepository.findById(bankConfigurationId)
@@ -264,6 +259,8 @@ public class PaymentService {
         tx.setBankAccount(config.getBankAccount());
         tx.setBankConfiguration(config);
         tx.setClient(client);
+        tx.setApiKeyId(apiKeyId);
+        tx.setSourceChannel(apiKeyId != null ? "PUBLIC_API" : "INTERNAL_PANEL");
         tx.setAmount(amount);
         tx.setType(TransactionType.CHARGE);
         tx.setStatus(TransactionStatus.PENDING);

@@ -12,6 +12,7 @@ import com.moonevue.gateway.service.bank.ASAAS.config.AsaasBankProperties;
 import com.moonevue.gateway.service.bank.ASAAS.config.AsaasConfigKeys;
 import com.moonevue.gateway.service.bank.ASAAS.dto.AsaasPaymentRequest;
 import com.moonevue.gateway.service.bank.ASAAS.dto.AsaasPaymentResponse;
+import com.moonevue.gateway.service.bank.ASAAS.dto.AsaasPixQrCodeResponse;
 import com.moonevue.gateway.service.bank.ASAAS.exception.AsaasApiException;
 import com.moonevue.gateway.service.bank.ASAAS.mapper.AsaasChargeRequestMapper;
 import com.moonevue.gateway.service.bank.ASAAS.mapper.AsaasChargeResponseMapper;
@@ -48,6 +49,7 @@ public class AsaasBankIntegration implements BankIntegration {
     private static final Logger log = LoggerFactory.getLogger(AsaasBankIntegration.class);
 
     private static final String PAYMENTS_PATH = "/v3/payments";
+    private static final String PIX_QRCODE_PATH = "/v3/payments/%s/pixQrCode";
 
     private final RequestSenderFactory senderFactory;
     private final ObjectMapper mapper;
@@ -93,6 +95,13 @@ public class AsaasBankIntegration implements BankIntegration {
 
             AsaasPaymentResponse asaasResponse = mapper.readValue(responseJson, AsaasPaymentResponse.class);
             ChargeResponseDTO out = responseMapper.toChargeResponse(asaasResponse);
+
+            // Para cobranças PIX, o copia-e-cola e o QR Code não vêm na criação:
+            // é necessária a chamada dedicada GET /v3/payments/{id}/pixQrCode.
+            if (isPix(asaasResponse.billingType()) && asaasResponse.id() != null) {
+                enrichWithPixQrCode(out, asaasResponse.id(), cfg, headers);
+            }
+
             return mapper.writeValueAsString(out);
         } catch (HttpRequestException e) {
             throw errorTranslator.translate(e);
@@ -102,6 +111,35 @@ public class AsaasBankIntegration implements BankIntegration {
             log.error("[ASAAS] Falha ao processar pagamento. configId={} erro={}",
                     cfg != null ? cfg.getId() : null, e.getMessage(), e);
             throw new RuntimeException("Erro na integração ASAAS: " + e.getMessage(), e);
+        }
+    }
+
+    private boolean isPix(String billingType) {
+        return billingType != null && "PIX".equalsIgnoreCase(billingType.trim());
+    }
+
+    /**
+     * Busca o QR Code PIX (imagem base64 + copia-e-cola) da cobrança recém-criada e
+     * popula o {@link ChargeResponseDTO}. Uma falha aqui não invalida a cobrança: a
+     * página da fatura ({@code invoiceUrl}) continua disponível, então apenas registramos
+     * o aviso e seguimos.
+     */
+    private void enrichWithPixQrCode(ChargeResponseDTO out, String paymentId,
+                                     BankConfiguration cfg, Map<String, String> headers) {
+        try {
+            String url = resolveBaseUrl(cfg) + String.format(PIX_QRCODE_PATH, paymentId);
+            String json = senderFactory.get(BankType.ASAAS, cfg)
+                    .send(Method.GET, url, null, headers, cfg);
+            AsaasPixQrCodeResponse qr = mapper.readValue(json, AsaasPixQrCodeResponse.class);
+            if (qr.payload() != null && !qr.payload().isBlank()) {
+                out.setPixCopiaECola(qr.payload());
+            }
+            if (qr.encodedImage() != null && !qr.encodedImage().isBlank()) {
+                out.setPixQrCodeImage(qr.encodedImage());
+            }
+        } catch (Exception e) {
+            log.warn("[ASAAS] Não foi possível obter o QR Code PIX. paymentId={} erro={}",
+                    paymentId, e.getMessage());
         }
     }
 

@@ -1,33 +1,54 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Form, Input, Modal, Radio, Space, Spin, Steps, Typography, message } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  Divider,
+  Form,
+  Input,
+  Result,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import {
+  CheckCircleFilled,
+  CopyOutlined,
+  LoadingOutlined,
+  QrcodeOutlined,
+} from '@ant-design/icons';
 import { CheckoutApi, CheckoutInfo, CheckoutPayRequest } from '@/lib/api/checkout';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 type Props = {
   params: Promise<{ token: string }>;
 };
 
+const INSTRUMENT_LABELS: Record<string, string> = {
+  PIX_IMMEDIATE: 'PIX (pagamento na hora)',
+  PIX_DUE: 'PIX com vencimento',
+  BOLETO: 'Boleto bancário',
+};
+
+const isPixInstrument = (instrument?: string) =>
+  !!instrument && instrument.toUpperCase().startsWith('PIX');
+
 export default function CheckoutPage({ params }: Props) {
   const [token, setToken] = useState<string>('');
   const [info, setInfo] = useState<CheckoutInfo | null>(null);
-  const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [lookingUpClient, setLookingUpClient] = useState(false);
   const [identifying, setIdentifying] = useState(false);
-  const [waitingConfirmation, setWaitingConfirmation] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form] = Form.useForm<CheckoutPayRequest>();
   const watchedInstrument = Form.useWatch('instrument', form);
-
-  const isCreditCardInstrument = (instrument?: string) => {
-    if (!instrument) return false;
-    const normalized = instrument.toUpperCase();
-    return normalized.includes('CARD') || normalized.includes('CREDIT');
-  };
 
   useEffect(() => {
     (async () => {
@@ -44,159 +65,76 @@ export default function CheckoutPage({ params }: Props) {
     })();
   }, [params]);
 
+  const allowedInstruments = useMemo(() => info?.allowedInstruments ?? [], [info]);
   const defaultInstrument = useMemo(
-    () => info?.allowedInstruments?.[0] || 'PIX_IMMEDIATE',
-    [info]
+    () => allowedInstruments[0] || 'PIX_IMMEDIATE',
+    [allowedInstruments]
   );
+  const selectedInstrument = watchedInstrument || defaultInstrument;
 
-  const currentInstrument = useMemo(
-    () => info?.allowedInstruments?.[0] || watchedInstrument || defaultInstrument,
-    [defaultInstrument, info?.allowedInstruments, watchedInstrument]
-  );
+  const paymentResult = info?.paymentResult;
+  const pixCopiaECola = paymentResult?.pixCopiaECola;
+  const hasPix = !!pixCopiaECola;
 
-  useEffect(() => {
-    if (!info) return;
-
-    if (info.status === 'PAID') {
-      setStep(3);
-      return;
+  const pixQrSrc = useMemo(() => {
+    if (paymentResult?.pixQrCodeImage) {
+      return `data:image/png;base64,${paymentResult.pixQrCodeImage}`;
     }
-
-    if (info.status === 'PROCESSING' || info.status === 'PENDING') {
-      setStep(2);
-      return;
+    if (pixCopiaECola) {
+      return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+        pixCopiaECola
+      )}`;
     }
+    return null;
+  }, [paymentResult?.pixQrCodeImage, pixCopiaECola]);
 
-    if (info.status === 'CHECKOUT_OPEN') {
-      setStep((prev) => (prev > 1 ? 1 : prev));
-      return;
-    }
-
-    if (info.status === 'FAILED') {
-      setStep((prev) => (prev > 1 ? 1 : prev));
-    }
-  }, [info]);
+  const isPaid = info?.status === 'PAID';
+  const isAwaiting = info?.status === 'PROCESSING' || info?.status === 'PENDING';
+  const isClosed = info?.status === 'EXPIRED' || info?.status === 'CANCELED';
+  const canPay = info?.status === 'CHECKOUT_OPEN' || info?.status === 'FAILED';
 
   const requiresDocumentValidation =
     info?.checkoutAccessMode === 'CLIENT_DOCUMENT' && !info?.identityVerified;
 
-  const onIdentify = async () => {
-    if (!token) return;
-    const document = form.getFieldValue('payerDocument');
-    if (!document) {
-      message.warning('Informe o CPF/CNPJ para validar sua identidade');
-      return;
-    }
+  const formatAmount = (value?: string | number) =>
+    `R$ ${Number(value || 0)
+      .toFixed(2)
+      .replace('.', ',')}`;
 
-    setIdentifying(true);
-    try {
-      const updated = await CheckoutApi.identify(token, { document });
-      setInfo(updated);
-      message.success('Identidade validada com sucesso');
-    } catch (e: any) {
-      message.error(e?.message || 'Falha ao validar identidade');
-    } finally {
-      setIdentifying(false);
-    }
-  };
-
-  const onNextToSummary = async () => {
-    try {
-      await form.validateFields(['instrument', 'payerName', 'payerDocument']);
-      if (requiresDocumentValidation) {
-        message.warning('Valide sua identidade antes de continuar');
-        return;
-      }
-      setStep(1);
-    } catch {
-      // validação visual do formulário
-    }
-  };
-
-  const onPay = async (values: any) => {
-    if (!token) return;
-    setPaying(true);
-    setError(null);
-
-    const payload: CheckoutPayRequest = {
-      instrument: values.instrument,
-      payerName: values.payerName,
-      payerDocument: values.payerDocument,
-      payerEmail: values.payerEmail,
-      payerPhone: values.payerPhone,
-      pixKey: values.pixKey,
-    };
-
-    try {
-      const result = await CheckoutApi.pay(token, payload);
-      setInfo(result);
-
-      if (result.status === 'PROCESSING' || result.status === 'PENDING') {
-        setStep(2);
-        setWaitingConfirmation(isCreditCardInstrument(values.instrument));
-        message.info('Pagamento iniciado. Aguardando confirmação...');
-      } else {
-        if (result.status === 'PAID') {
-          setStep(3);
-          message.success('Pagamento processado com sucesso');
-        } else if (result.status === 'FAILED') {
-          setStep(1);
-          message.error('Não foi possível processar o pagamento. Revise os dados e tente novamente.');
-        } else if (result.status === 'EXPIRED' || result.status === 'CANCELED') {
-          message.warning('Este checkout não está mais disponível para pagamento.');
-        }
-        setWaitingConfirmation(false);
-      }
-    } catch (e: any) {
-      setError(e?.message || 'Falha ao processar pagamento');
-    } finally {
-      setPaying(false);
-    }
-  };
-
+  // Polling enquanto o pagamento aguarda confirmação do banco.
   useEffect(() => {
-    if (!token) return;
-    if (!(info?.status === 'PROCESSING' || info?.status === 'PENDING')) {
-      setWaitingConfirmation(false);
-      return;
-    }
-
-    setWaitingConfirmation(isCreditCardInstrument(currentInstrument));
+    if (!token || !isAwaiting) return;
 
     const intervalId = window.setInterval(async () => {
       try {
         const updated = await CheckoutApi.getStatus(token);
         setInfo(updated);
-
-        if (updated.status === 'PAID') {
-          setStep(3);
-          setWaitingConfirmation(false);
-          message.success('Pagamento confirmado!');
-          window.clearInterval(intervalId);
-        }
-
-        if (updated.status === 'FAILED' || updated.status === 'EXPIRED' || updated.status === 'CANCELED') {
-          setWaitingConfirmation(false);
+        if (
+          updated.status === 'PAID' ||
+          updated.status === 'FAILED' ||
+          updated.status === 'EXPIRED' ||
+          updated.status === 'CANCELED'
+        ) {
+          if (updated.status === 'PAID') message.success('Pagamento confirmado!');
           window.clearInterval(intervalId);
         }
       } catch {
-        // Mantém polling silencioso para não poluir a experiência do usuário.
+        // mantém o polling silencioso
       }
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [token, info?.status, currentInstrument]);
+  }, [token, isAwaiting]);
 
-  const pixCopiaECola = info?.paymentResult?.pixCopiaECola;
-  const pixQrUrl = pixCopiaECola
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(pixCopiaECola)}`
-    : null;
-
-  const copy = async (text?: string) => {
+  const copy = useCallback(async (text?: string) => {
     if (!text) return;
-    await navigator.clipboard.writeText(text);
-    message.success('Copiado');
-  };
+    try {
+      await navigator.clipboard.writeText(text);
+      message.success('Código PIX copiado');
+    } catch {
+      message.error('Não foi possível copiar automaticamente. Copie manualmente.');
+    }
+  }, []);
 
   const onLookupClient = async () => {
     const document = form.getFieldValue('payerDocument');
@@ -204,7 +142,6 @@ export default function CheckoutPage({ params }: Props) {
       message.warning('Informe o CPF/CNPJ para buscar seus dados');
       return;
     }
-
     setLookingUpClient(true);
     try {
       const result = await CheckoutApi.lookupClient(token, document);
@@ -212,7 +149,6 @@ export default function CheckoutPage({ params }: Props) {
         message.info('Nenhum cadastro encontrado para este documento');
         return;
       }
-
       form.setFieldsValue({
         payerName: result.name,
         payerEmail: result.email,
@@ -226,6 +162,68 @@ export default function CheckoutPage({ params }: Props) {
     }
   };
 
+  const onIdentify = async () => {
+    if (!token) return;
+    const document = form.getFieldValue('payerDocument');
+    if (!document) {
+      message.warning('Informe o CPF/CNPJ para validar sua identidade');
+      return;
+    }
+    setIdentifying(true);
+    try {
+      const updated = await CheckoutApi.identify(token, { document });
+      setInfo(updated);
+      message.success('Identidade validada com sucesso');
+    } catch (e: any) {
+      message.error(e?.message || 'Falha ao validar identidade');
+    } finally {
+      setIdentifying(false);
+    }
+  };
+
+  const onPay = async () => {
+    if (!token) return;
+    try {
+      await form.validateFields();
+    } catch {
+      return;
+    }
+    if (requiresDocumentValidation) {
+      message.warning('Valide sua identidade antes de pagar');
+      return;
+    }
+
+    const values = form.getFieldsValue();
+    const payload: CheckoutPayRequest = {
+      instrument: values.instrument || defaultInstrument,
+      payerName: values.payerName,
+      payerDocument: values.payerDocument,
+      payerEmail: values.payerEmail,
+      payerPhone: values.payerPhone,
+      pixKey: values.pixKey,
+    };
+
+    setPaying(true);
+    setError(null);
+    try {
+      const result = await CheckoutApi.pay(token, payload);
+      setInfo(result);
+      if (result.status === 'FAILED') {
+        message.error('Não foi possível processar o pagamento. Revise os dados e tente novamente.');
+      } else if (result.status === 'PAID') {
+        message.success('Pagamento confirmado!');
+      } else if (isPixInstrument(payload.instrument)) {
+        message.success('PIX gerado! Escaneie o QR Code ou copie o código para pagar.');
+      } else {
+        message.info('Pagamento iniciado. Aguardando confirmação...');
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Falha ao processar pagamento');
+    } finally {
+      setPaying(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -235,268 +233,283 @@ export default function CheckoutPage({ params }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl p-4 md:p-8">
-      <Card>
-        <Space direction="vertical" size="middle" className="w-full">
-          <Title level={3} className="!mb-0">Checkout</Title>
+    <div className="mx-auto max-w-xl p-4 md:p-8">
+      <Card styles={{ body: { padding: 24 } }}>
+        {error && <Alert type="error" message={error} showIcon className="!mb-4" />}
 
-          <Steps
-            size="small"
-            current={step}
-            items={[
-              { title: 'Dados' },
-              { title: 'Resumo' },
-              { title: 'Aguardando' },
-              { title: 'Concluído' },
-            ]}
+        {!info ? (
+          <Alert
+            type="error"
+            showIcon
+            message="Checkout indisponível"
+            description="Não foi possível carregar este checkout."
           />
-
-          {error && <Alert type="error" message={error} showIcon />}
-
-          {info && (
-            <>
-              <div style={{ background: '#fafafa', borderRadius: 8, padding: '12px 16px' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>
-                  R$ {Number(info.amount || 0).toFixed(2).replace('.', ',')}
-                </div>
-                {info.description && (
-                  <div style={{ color: '#555', marginTop: 4 }}>{info.description}</div>
-                )}
-                {info.status === 'CHECKOUT_OPEN' && info.expiresAt && (
-                  <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>
-                    Link válido até {new Date(info.expiresAt).toLocaleString('pt-BR')}
-                  </div>
-                )}
+        ) : (
+          <Space direction="vertical" size="large" className="w-full">
+            {/* Cabeçalho com valor */}
+            <div className="text-center">
+              <Text type="secondary">Total a pagar</Text>
+              <div style={{ fontSize: 38, fontWeight: 800, lineHeight: 1.1, color: '#111' }}>
+                {formatAmount(info.amount)}
               </div>
-
+              {info.description && (
+                <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+                  {info.description}
+                </Text>
+              )}
               {info.clientName && (
-                <Alert
-                  showIcon
-                  type="info"
-                  message={`Esta cobrança está vinculada a ${info.clientName}${info.clientDocumentMasked ? ` (doc. terminado em ${info.clientDocumentMasked})` : ''}`}
-                />
+                <Tag color="blue" style={{ marginTop: 10 }}>
+                  {info.clientName}
+                  {info.clientDocumentMasked ? ` · doc. ${info.clientDocumentMasked}` : ''}
+                </Tag>
               )}
+            </div>
 
-              {info.checkoutAccessMode && info.checkoutAccessMode !== 'PUBLIC' && (
-                <Alert
-                  showIcon
-                  type="info"
-                  message="Checkout com validação de identidade"
-                  description={
-                    info.identityVerified
-                      ? 'Identidade já validada para esta sessão.'
-                      : 'Antes de pagar, valide o documento do cliente vinculado.'
-                  }
-                />
-              )}
-
-              {(info.status === 'PROCESSING' || info.status === 'PENDING') && (
-                <Alert
-                  showIcon
-                  type="info"
-                  message="Aguardando confirmação do pagamento"
-                  description="Assim que o banco confirmar, esta tela será atualizada automaticamente."
-                />
-              )}
-
-              {pixCopiaECola && (
-                <Card type="inner" title="Pague com PIX">
-                  <Space direction="vertical" className="w-full" size="middle">
-                    <Text>Escaneie o QR Code no app do seu banco:</Text>
-                    {pixQrUrl && (
-                      <div className="flex justify-center">
-                        <img src={pixQrUrl} alt="QR Code PIX" width={280} height={280} />
-                      </div>
-                    )}
-
-                    <Text>Ou copie o código PIX:</Text>
-                    <Input.TextArea readOnly rows={4} value={pixCopiaECola} />
-                    <Button onClick={() => copy(pixCopiaECola)}>Copiar PIX Copia e Cola</Button>
-                  </Space>
-                </Card>
-              )}
-
-              {info.status === 'PAID' && info.paymentResult && (
-                <Card type="inner" title="Pagamento realizado">
-                  <Space direction="vertical" className="w-full">
-                    <Text>ID: {info.paymentResult.id}</Text>
-                    <Text>Status: {info.paymentResult.status}</Text>
-                    {info.paymentResult.barcode && <Text>Código de barras: {info.paymentResult.barcode}</Text>}
+            {/* PAGO */}
+            {isPaid && (
+              <Result
+                status="success"
+                title="Pagamento confirmado"
+                subTitle="Recebemos a confirmação do seu pagamento."
+              >
+                {info.paymentResult && (
+                  <div className="text-left">
                     {info.paymentResult.billetLink && (
-                      <a href={info.paymentResult.billetLink} target="_blank" rel="noreferrer">Abrir boleto</a>
+                      <Paragraph>
+                        <a href={info.paymentResult.billetLink} target="_blank" rel="noreferrer">
+                          Abrir comprovante / boleto
+                        </a>
+                      </Paragraph>
                     )}
                     {info.paymentResult.pdfLink && (
-                      <a href={info.paymentResult.pdfLink} target="_blank" rel="noreferrer">Abrir PDF</a>
+                      <Paragraph>
+                        <a href={info.paymentResult.pdfLink} target="_blank" rel="noreferrer">
+                          Abrir PDF
+                        </a>
+                      </Paragraph>
                     )}
-                  </Space>
-                </Card>
-              )}
+                  </div>
+                )}
+              </Result>
+            )}
 
-              {(info.status === 'EXPIRED' || info.status === 'CANCELED') && (
-                <Alert
-                  showIcon
-                  type="warning"
-                  message={info.status === 'EXPIRED' ? 'Este link expirou' : 'Este link foi cancelado'}
+            {/* ENCERRADO */}
+            {isClosed && (
+              <Alert
+                showIcon
+                type="warning"
+                message={info.status === 'EXPIRED' ? 'Este link expirou' : 'Este link foi cancelado'}
+                description="Solicite um novo link de cobrança ao estabelecimento."
+              />
+            )}
+
+            {/* PIX GERADO — QR + copia e cola */}
+            {!isPaid && !isClosed && hasPix && (
+              <div className="text-center">
+                <Space align="center" size="small" style={{ marginBottom: 8 }}>
+                  <QrcodeOutlined style={{ fontSize: 18, color: '#1677ff' }} />
+                  <Title level={5} className="!mb-0">
+                    Pague com PIX
+                  </Title>
+                </Space>
+                <Paragraph type="secondary" className="!mb-3">
+                  Abra o app do seu banco, escolha pagar com PIX e escaneie o QR Code abaixo.
+                </Paragraph>
+
+                {pixQrSrc && (
+                  <div
+                    style={{
+                      display: 'inline-block',
+                      padding: 12,
+                      background: '#fff',
+                      border: '1px solid #f0f0f0',
+                      borderRadius: 12,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={pixQrSrc} alt="QR Code PIX" width={240} height={240} />
+                  </div>
+                )}
+
+                <Divider plain style={{ margin: '20px 0 12px' }}>
+                  ou copie o código
+                </Divider>
+
+                <Input.TextArea
+                  readOnly
+                  value={pixCopiaECola}
+                  autoSize={{ minRows: 3, maxRows: 4 }}
+                  onFocus={(e) => e.target.select()}
+                  style={{ fontSize: 12, fontFamily: 'monospace' }}
                 />
-              )}
+                <Button
+                  type="primary"
+                  icon={<CopyOutlined />}
+                  block
+                  size="large"
+                  style={{ marginTop: 12 }}
+                  onClick={() => copy(pixCopiaECola)}
+                >
+                  Copiar código PIX
+                </Button>
 
-              {info.status === 'FAILED' && (
-                <Alert
-                  showIcon
-                  type="error"
-                  message="Falha ao processar pagamento"
-                  description="Revise os dados informados e tente novamente."
-                />
-              )}
+                <div
+                  style={{
+                    marginTop: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    color: '#888',
+                  }}
+                >
+                  {isAwaiting ? (
+                    <>
+                      <Spin indicator={<LoadingOutlined spin />} size="small" />
+                      <Text type="secondary">Aguardando confirmação do pagamento…</Text>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircleFilled style={{ color: '#52c41a' }} />
+                      <Text type="secondary">
+                        Atualizamos esta tela assim que o pagamento for confirmado.
+                      </Text>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
-              {(info.status === 'CHECKOUT_OPEN' || info.status === 'FAILED') && step === 0 && (
+            {/* AGUARDANDO (não-PIX, ex.: boleto/cartão) */}
+            {!isPaid && !isClosed && !hasPix && isAwaiting && (
+              <Alert
+                showIcon
+                type="info"
+                message="Aguardando confirmação do pagamento"
+                description="Assim que o banco confirmar, esta tela será atualizada automaticamente."
+              />
+            )}
+
+            {/* FORMULÁRIO DE PAGAMENTO */}
+            {canPay && !hasPix && (
+              <>
+                {info.checkoutAccessMode &&
+                  info.checkoutAccessMode !== 'PUBLIC' &&
+                  !info.identityVerified && (
+                    <Alert
+                      showIcon
+                      type="info"
+                      message="Validação de identidade necessária"
+                      description="Informe o documento do cliente vinculado e valide antes de pagar."
+                    />
+                  )}
+
+                {info.status === 'FAILED' && (
+                  <Alert
+                    showIcon
+                    type="error"
+                    message="Não foi possível processar o pagamento anterior"
+                    description="Revise os dados e tente novamente."
+                  />
+                )}
+
                 <Form
                   form={form}
                   layout="vertical"
-                  onValuesChange={() => {
-                    if (error) {
-                      setError(null);
-                    }
-                  }}
+                  requiredMark={false}
                   initialValues={{ instrument: defaultInstrument }}
+                  onValuesChange={() => error && setError(null)}
                 >
-                  <Form.Item
-                    label="Método de pagamento"
-                    name="instrument"
-                    rules={[{ required: true, message: 'Selecione um método' }]}
-                  >
-                    <Radio.Group>
-                      <Space direction="vertical">
-                        {info.allowedInstruments.map((method) => (
-                          <Radio key={method} value={method}>
-                            {method === 'PIX_IMMEDIATE' ? '⚡ PIX (pagamento na hora)'
-                              : method === 'PIX_DUE' ? '📅 PIX com vencimento'
-                              : method === 'BOLETO' ? '🏦 Boleto bancário'
-                              : method}
-                          </Radio>
-                        ))}
-                      </Space>
-                    </Radio.Group>
-                  </Form.Item>
-
-                  <Form.Item
-                    label="Nome"
-                    name="payerName"
-                    rules={[{ required: true, message: 'Informe o nome' }]}
-                  >
-                    <Input />
-                  </Form.Item>
+                  {allowedInstruments.length > 1 ? (
+                    <Form.Item
+                      label="Forma de pagamento"
+                      name="instrument"
+                      rules={[{ required: true, message: 'Selecione um método' }]}
+                    >
+                      <Select
+                        options={allowedInstruments.map((m) => ({
+                          value: m,
+                          label: INSTRUMENT_LABELS[m] ?? m,
+                        }))}
+                      />
+                    </Form.Item>
+                  ) : (
+                    <Form.Item name="instrument" hidden>
+                      <Input />
+                    </Form.Item>
+                  )}
 
                   <Form.Item
                     label="CPF/CNPJ"
                     name="payerDocument"
                     rules={[{ required: true, message: 'Informe CPF ou CNPJ' }]}
                   >
-                    <Input />
+                    <Input
+                      placeholder="Somente números"
+                      addonAfter={
+                        <a onClick={onLookupClient}>
+                          {lookingUpClient ? 'Buscando…' : 'Buscar dados'}
+                        </a>
+                      }
+                    />
                   </Form.Item>
 
-                  <Button onClick={onLookupClient} loading={lookingUpClient} style={{ marginBottom: 16 }}>
-                    Buscar meus dados
-                  </Button>
-
                   {requiresDocumentValidation && (
-                    <Button onClick={onIdentify} loading={identifying} style={{ marginBottom: 16 }}>
+                    <Button
+                      onClick={onIdentify}
+                      loading={identifying}
+                      block
+                      style={{ marginBottom: 16 }}
+                    >
                       Validar identidade
                     </Button>
                   )}
 
+                  <Form.Item
+                    label="Nome"
+                    name="payerName"
+                    rules={[{ required: true, message: 'Informe o nome' }]}
+                  >
+                    <Input placeholder="Nome completo" />
+                  </Form.Item>
+
                   <Form.Item label="E-mail (opcional)" name="payerEmail">
-                    <Input />
+                    <Input placeholder="email@exemplo.com" />
                   </Form.Item>
 
                   <Form.Item label="Telefone (opcional)" name="payerPhone">
-                    <Input />
+                    <Input placeholder="(00) 00000-0000" />
                   </Form.Item>
 
-                  {(info.allowedInstruments.includes('PIX_IMMEDIATE') || info.allowedInstruments.includes('PIX_DUE')) && (
+                  {(allowedInstruments.includes('PIX_IMMEDIATE') ||
+                    allowedInstruments.includes('PIX_DUE')) && (
                     <Form.Item
                       label="Sua chave PIX (opcional)"
                       name="pixKey"
-                      extra="Informe se quiser usar uma chave PIX específica."
+                      extra="Informe apenas se quiser usar uma chave específica."
                     >
-                      <Input placeholder="CPF, email, telefone ou chave aleatoria" />
+                      <Input placeholder="CPF, e-mail, telefone ou chave aleatória" />
                     </Form.Item>
                   )}
 
-                  <Button type="primary" onClick={onNextToSummary}>
-                    Continuar
+                  <Button type="primary" size="large" block loading={paying} onClick={onPay}>
+                    {isPixInstrument(selectedInstrument) ? 'Gerar PIX' : 'Pagar'}
                   </Button>
                 </Form>
-              )}
 
-              {(info.status === 'CHECKOUT_OPEN' || info.status === 'FAILED') && step === 1 && (
-                <Card type="inner" title="Resumo da cobrança">
-                  <Space direction="vertical" className="w-full">
-                    <Text><strong>Nome:</strong> {form.getFieldValue('payerName') || '-'}</Text>
-                    <Text><strong>Documento:</strong> {form.getFieldValue('payerDocument') || '-'}</Text>
-                    <Text><strong>Forma de pagamento:</strong> {
-                      (() => {
-                        const m = form.getFieldValue('instrument') || defaultInstrument;
-                        return m === 'PIX_IMMEDIATE' ? 'PIX (pagamento na hora)'
-                          : m === 'PIX_DUE' ? 'PIX com vencimento'
-                          : m === 'BOLETO' ? 'Boleto bancário'
-                          : m;
-                      })()
-                    }</Text>
-                    <Text><strong>Valor a pagar:</strong> R$ {Number(info.amount || 0).toFixed(2).replace('.', ',')}</Text>
-
-                    <Space>
-                      <Button onClick={() => setStep(0)}>Voltar</Button>
-                      <Button
-                        type="primary"
-                        loading={paying}
-                        onClick={() => form.submit()}
-                      >
-                        Confirmar e pagar
-                      </Button>
-                    </Space>
-                  </Space>
-                </Card>
-              )}
-
-              {step === 1 && (
-                <Form form={form} onFinish={onPay} style={{ display: 'none' }}>
-                  <Form.Item name="instrument"><Input /></Form.Item>
-                  <Form.Item name="payerName"><Input /></Form.Item>
-                  <Form.Item name="payerDocument"><Input /></Form.Item>
-                  <Form.Item name="payerEmail"><Input /></Form.Item>
-                  <Form.Item name="payerPhone"><Input /></Form.Item>
-                  <Form.Item name="pixKey"><Input /></Form.Item>
-                </Form>
-              )}
-
-              {(info?.status === 'PROCESSING' || info?.status === 'PENDING') && step === 2 && (
-                <Alert
-                  showIcon
-                  type="info"
-                  message="Aguardando confirmação do pagamento"
-                  description="Quando o banco confirmar, você verá a tela de pagamento concluído automaticamente."
-                />
-              )}
-            </>
-          )}
-        </Space>
+                {info.status === 'CHECKOUT_OPEN' && info.expiresAt && (
+                  <Text
+                    type="secondary"
+                    style={{ display: 'block', textAlign: 'center', fontSize: 12 }}
+                  >
+                    Link válido até {new Date(info.expiresAt).toLocaleString('pt-BR')}
+                  </Text>
+                )}
+              </>
+            )}
+          </Space>
+        )}
       </Card>
-
-      <Modal
-        open={waitingConfirmation}
-        closable={false}
-        footer={null}
-        centered
-        title="Aguardando confirmação"
-      >
-        <Space direction="vertical" size="middle" className="w-full">
-          <Text>Seu pagamento foi iniciado. Estamos aguardando o retorno do banco.</Text>
-          <div className="flex justify-center">
-            <Spin size="large" />
-          </div>
-        </Space>
-      </Modal>
     </div>
   );
 }

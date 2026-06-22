@@ -1,49 +1,53 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { Button } from 'antd';
-import { CloseOutlined, MenuOutlined } from '@ant-design/icons';
-import { dmSerifDisplay } from '@/app/ui/fonts';
+import Link from "next/link";
+import { useState } from "react";
+import { Button } from "antd";
+import { CloseOutlined, MenuOutlined } from "@ant-design/icons";
+import { dmSerifDisplay } from "@/app/ui/fonts";
 
 const links = [
-  { href: '#produto', label: 'Produto' },
-  { href: '#beneficios', label: 'Benefícios' },
-  { href: '#integracoes', label: 'Integrações' },
-  { href: '/client-area', label: 'Área do cliente' },
+  { href: "#possibilidades", label: "Possibilidades" },
+  { href: "#como-funciona", label: "Como funciona" },
+  { href: "#desenvolvedores", label: "Desenvolvedores" },
+  { href: "/client-area", label: "Área do cliente" },
 ];
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const navStyle: React.CSSProperties = { color: '#595959', fontSize: 14, textDecoration: 'none' };
+  const navStyle: React.CSSProperties = {
+    color: "#595959",
+    fontSize: 14,
+    textDecoration: "none",
+  };
 
   return (
     <header
       style={{
-        position: 'sticky',
+        position: "sticky",
         top: 0,
         zIndex: 50,
-        borderBottom: '1px solid #f0f0f0',
-        background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(8px)',
+        borderBottom: "1px solid #f0f0f0",
+        background: "rgba(255,255,255,0.92)",
+        backdropFilter: "blur(8px)",
       }}
     >
       <div
         style={{
           maxWidth: 1280,
-          margin: '0 auto',
-          padding: '0 24px',
+          margin: "0 auto",
+          padding: "0 24px",
           height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
         <Link
           href="/"
           className={dmSerifDisplay.className}
-          style={{ fontSize: 22, color: '#0a0a0a', textDecoration: 'none' }}
+          style={{ fontSize: 22, color: "#0a0a0a", textDecoration: "none" }}
         >
           MOONEVUE
         </Link>
@@ -51,10 +55,10 @@ export default function Header() {
         {/* Desktop nav */}
         <nav
           className="hidden md:flex"
-          style={{ display: 'flex', gap: 32, alignItems: 'center' }}
+          style={{ display: "flex", gap: 32, alignItems: "center" }}
         >
           {links.map((item) =>
-            item.href.startsWith('#') ? (
+            item.href.startsWith("#") ? (
               <a key={item.href} href={item.href} style={navStyle}>
                 {item.label}
               </a>
@@ -62,12 +66,12 @@ export default function Header() {
               <Link key={item.href} href={item.href} style={navStyle}>
                 {item.label}
               </Link>
-            )
+            ),
           )}
         </nav>
 
         {/* Desktop auth buttons */}
-        <div className="hidden md:flex" style={{ display: 'flex', gap: 8 }}>
+        <div className="hidden md:flex" style={{ display: "flex", gap: 8 }}>
           <Button href="/client-area">Sou cliente</Button>
           <Button href="/login">Entrar</Button>
           <Button type="primary" href="/register">
@@ -87,14 +91,20 @@ export default function Header() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div style={{ borderTop: '1px solid #f0f0f0', background: '#fff', padding: '16px 24px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div
+          style={{
+            borderTop: "1px solid #f0f0f0",
+            background: "#fff",
+            padding: "16px 24px",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {links.map((item) =>
-              item.href.startsWith('#') ? (
+              item.href.startsWith("#") ? (
                 <a
                   key={item.href}
                   href={item.href}
-                  style={{ ...navStyle, padding: '8px 0', display: 'block' }}
+                  style={{ ...navStyle, padding: "8px 0", display: "block" }}
                   onClick={() => setMobileOpen(false)}
                 >
                   {item.label}
@@ -103,15 +113,15 @@ export default function Header() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  style={{ ...navStyle, padding: '8px 0', display: 'block' }}
+                  style={{ ...navStyle, padding: "8px 0", display: "block" }}
                   onClick={() => setMobileOpen(false)}
                 >
                   {item.label}
                 </Link>
-              )
+              ),
             )}
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
             <Button href="/client-area" block>
               Sou cliente
             </Button>

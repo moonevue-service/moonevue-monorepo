@@ -25,9 +25,12 @@ public class SecurityConfig {
     private String cookieName;
 
     private final WebhookSignatureFilter webhookSignatureFilter;
+    private final com.moonevue.gateway.security.ApiKeyAuthFilter apiKeyAuthFilter;
 
-    public SecurityConfig(WebhookSignatureFilter webhookSignatureFilter) {
+    public SecurityConfig(WebhookSignatureFilter webhookSignatureFilter,
+                          com.moonevue.gateway.security.ApiKeyAuthFilter apiKeyAuthFilter) {
         this.webhookSignatureFilter = webhookSignatureFilter;
+        this.apiKeyAuthFilter = apiKeyAuthFilter;
     }
 
     @Bean
@@ -60,6 +63,9 @@ public class SecurityConfig {
                 new SessionValidationFilter(restTemplate, authBaseUrl, internalToken, cookieName),
                 webhookSignatureFilter.getClass()
         );
+
+        // API Key auth roda antes da validação de sessão para autenticar a API pública (/api/v1/**).
+        http.addFilterBefore(apiKeyAuthFilter, SessionValidationFilter.class);
 
         return http.build();
     }

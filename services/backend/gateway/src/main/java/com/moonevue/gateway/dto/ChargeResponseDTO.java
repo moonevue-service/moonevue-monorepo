@@ -22,6 +22,7 @@ public class ChargeResponseDTO {
     private String location;
     private String tipoCob;          // "cob" | "cobv"
     private String pixCopiaECola;
+    private String pixQrCodeImage;   // imagem do QR Code em base64 (data sem prefixo)
     private String chave;
 
     // BOLETO
@@ -55,6 +56,8 @@ public class ChargeResponseDTO {
     public void setTipoCob(String tipoCob) { this.tipoCob = tipoCob; }
     public String getPixCopiaECola() { return pixCopiaECola; }
     public void setPixCopiaECola(String pixCopiaECola) { this.pixCopiaECola = pixCopiaECola; }
+    public String getPixQrCodeImage() { return pixQrCodeImage; }
+    public void setPixQrCodeImage(String pixQrCodeImage) { this.pixQrCodeImage = pixQrCodeImage; }
     public String getChave() { return chave; }
     public void setChave(String chave) { this.chave = chave; }
     public String getBarcode() { return barcode; }
