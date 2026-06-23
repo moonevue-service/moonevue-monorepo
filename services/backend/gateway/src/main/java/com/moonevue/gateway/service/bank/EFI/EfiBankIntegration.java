@@ -186,7 +186,9 @@ public class EfiBankIntegration implements BankIntegration {
 
     private String callChargesBoleto(ChargeRequestDTO req, BankConfiguration cfg) throws Exception {
         EnvUrls urls = getChargesUrls(cfg);
-        AccessToken token = getNamespacedToken(cfg, BankConfigKeys.CHARGES_NS, urls.tokenUrl, false);
+        // Cobranças (Boleto) pode reutilizar as credenciais do PIX quando o namespace
+        // "charges" não estiver configurado (comportamento documentado na UI).
+        AccessToken token = getNamespacedToken(cfg, BankConfigKeys.CHARGES_NS, BankConfigKeys.PIX_NS, urls.tokenUrl, false);
 
         ObjectNode body = mapper.createObjectNode();
         ArrayNode items = body.putArray("items");
@@ -314,7 +316,8 @@ public class EfiBankIntegration implements BankIntegration {
         out.setKind("boleto");
         out.setId(asTextSafe(data, "charge_id"));
         out.setStatus(asTextSafe(data, "status"));
-        out.setAmount(asTextSafe(data, "total")); // em centavos, se preferir converta
+        // A EFI retorna "total" em centavos; padronizamos para reais (ex.: 1000 -> "10.00").
+        out.setAmount(centsToReais(asTextSafe(data, "total")));
         out.setDueDate(asTextSafe(data, "expire_at"));
 
         out.setBarcode(asTextSafe(data, "barcode"));
@@ -334,23 +337,58 @@ public class EfiBankIntegration implements BankIntegration {
         return node.has(field) && !node.get(field).isNull() ? node.get(field).asText(null) : null;
     }
 
+    /** Converte um valor em centavos (string) para reais com 2 casas (ex.: "1000" -> "10.00"). */
+    private static String centsToReais(String cents) {
+        if (cents == null || cents.isBlank()) return cents;
+        try {
+            return new BigDecimal(cents.trim())
+                    .movePointLeft(2)
+                    .setScale(2, java.math.RoundingMode.HALF_UP)
+                    .toPlainString();
+        } catch (NumberFormatException e) {
+            return cents;
+        }
+    }
+
     private AccessToken getNamespacedToken(BankConfiguration cfg,
                                            String namespace,
                                            String tokenUrl,
                                            boolean useMtlsForToken) {
-        String clientId = ExtraConfigUtils.requireString(
-                cfg.getExtraConfig(),
-                namespace + "." + BankConfigKeys.CLIENT_ID,
-                namespace + "." + BankConfigKeys.CLIENT_ID
-        );
-        String clientSecret = ExtraConfigUtils.requireString(
-                cfg.getExtraConfig(),
-                namespace + "." + BankConfigKeys.CLIENT_SECRET,
-                namespace + "." + BankConfigKeys.CLIENT_SECRET
-        );
+        return getNamespacedToken(cfg, namespace, null, tokenUrl, useMtlsForToken);
+    }
+
+    private AccessToken getNamespacedToken(BankConfiguration cfg,
+                                           String namespace,
+                                           String fallbackNamespace,
+                                           String tokenUrl,
+                                           boolean useMtlsForToken) {
+        String clientId = resolveCredential(cfg, namespace, fallbackNamespace, BankConfigKeys.CLIENT_ID);
+        String clientSecret = resolveCredential(cfg, namespace, fallbackNamespace, BankConfigKeys.CLIENT_SECRET);
         String scope = ExtraConfigUtils.getString(cfg.getExtraConfig(), namespace + "." + BankConfigKeys.SCOPE, null);
         OAuthClientCredentials creds = new OAuthClientCredentials(clientId, clientSecret, scope);
         return tokenService.getTokenFor(BankType.EFI, tokenUrl, creds, cfg, useMtlsForToken);
+    }
+
+    /**
+     * Lê uma credencial do namespace informado, recorrendo ao {@code fallbackNamespace}
+     * (quando fornecido) caso o valor primário esteja ausente. Lança erro descritivo
+     * apenas quando nenhum dos namespaces possui o valor.
+     */
+    private String resolveCredential(BankConfiguration cfg,
+                                     String namespace,
+                                     String fallbackNamespace,
+                                     String key) {
+        String value = ExtraConfigUtils.getString(cfg.getExtraConfig(), namespace + "." + key, null);
+        if ((value == null || value.isBlank()) && fallbackNamespace != null) {
+            value = ExtraConfigUtils.getString(cfg.getExtraConfig(), fallbackNamespace + "." + key, null);
+        }
+        if (value == null || value.isBlank()) {
+            String label = fallbackNamespace != null
+                    ? namespace + "." + key + " (nem " + fallbackNamespace + "." + key + ")"
+                    : namespace + "." + key;
+            throw new IllegalArgumentException("Configuração obrigatória ausente: " + label);
+        }
+        return value;
     }
 
     private Map<String, String> bearerHeaders(AccessToken token) {

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   App,
   Button,
@@ -15,12 +15,22 @@ import {
   Tag,
   Tooltip,
   Typography,
-} from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
-import { useAuth } from '@/app/providers';
-import { canManageBankConfigurations } from '@/lib/authz';
-import { AccountType, BankAccountResponse, BankType, FinanceApi } from '@/lib/api';
+} from "antd";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
+import type { ColumnsType } from "antd/es/table";
+import { useAuth } from "@/app/providers";
+import { canManageBankConfigurations } from "@/lib/authz";
+import {
+  AccountType,
+  BankAccountResponse,
+  BankType,
+  FinanceApi,
+} from "@/lib/api";
 
 const { Title, Text } = Typography;
 
@@ -44,8 +54,10 @@ export default function BankAccountsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "ALL" | "ACTIVE" | "INACTIVE"
+  >("ALL");
 
   useEffect(() => {
     if (user?.tenantId) loadAccounts();
@@ -59,7 +71,7 @@ export default function BankAccountsPage() {
       const data = await FinanceApi.listBankAccounts(user.tenantId);
       setAccounts(data);
     } catch (err: any) {
-      message.error(err?.message || 'Erro ao carregar contas bancárias');
+      message.error(err?.message || "Erro ao carregar contas bancárias");
     } finally {
       setLoading(false);
     }
@@ -68,7 +80,10 @@ export default function BankAccountsPage() {
   const openCreate = () => {
     setEditingId(null);
     form.resetFields();
-    form.setFieldsValue({ bank: 'EFI' as BankType, accountType: 'CHECKING' as AccountType });
+    form.setFieldsValue({
+      bank: "EFI" as BankType,
+      accountType: "CHECKING" as AccountType,
+    });
     setModalOpen(true);
   };
 
@@ -90,23 +105,29 @@ export default function BankAccountsPage() {
     setSubmitting(true);
     try {
       if (editingId !== null) {
-        const updated = await FinanceApi.updateBankAccount(user.tenantId, editingId, {
-          ...values,
-          active: true,
-        });
-        setAccounts((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
-        message.success('Conta atualizada com sucesso');
+        const updated = await FinanceApi.updateBankAccount(
+          user.tenantId,
+          editingId,
+          {
+            ...values,
+            active: true,
+          },
+        );
+        setAccounts((prev) =>
+          prev.map((a) => (a.id === editingId ? updated : a)),
+        );
+        message.success("Conta atualizada com sucesso");
       } else {
         const created = await FinanceApi.createBankAccount(user.tenantId, {
           ...values,
           active: true,
         });
         setAccounts((prev) => [...prev, created]);
-        message.success('Conta criada com sucesso');
+        message.success("Conta criada com sucesso");
       }
       setModalOpen(false);
     } catch (err: any) {
-      message.error(err?.message || 'Erro ao salvar conta bancária');
+      message.error(err?.message || "Erro ao salvar conta bancária");
     } finally {
       setSubmitting(false);
     }
@@ -117,9 +138,9 @@ export default function BankAccountsPage() {
     try {
       await FinanceApi.deleteBankAccount(user.tenantId, id);
       setAccounts((prev) => prev.filter((a) => a.id !== id));
-      message.success('Conta removida');
+      message.success("Conta removida");
     } catch (err: any) {
-      message.error(err?.message || 'Erro ao remover conta');
+      message.error(err?.message || "Erro ao remover conta");
     }
   };
 
@@ -133,50 +154,74 @@ export default function BankAccountsPage() {
         a.cdAgency.toLowerCase().includes(normalized) ||
         a.cdAccount.toLowerCase().includes(normalized);
       const matchesStatus =
-        statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? a.active : !a.active);
+        statusFilter === "ALL" ||
+        (statusFilter === "ACTIVE" ? a.active : !a.active);
       return matchesText && matchesStatus;
     });
   }, [accounts, searchText, statusFilter]);
 
   const columns: ColumnsType<BankAccountResponse> = [
-    { title: 'Nome', dataIndex: 'name', key: 'name' },
-    { title: 'Banco', dataIndex: 'bank', key: 'bank', width: 80 },
-    { title: 'Agência', dataIndex: 'cdAgency', key: 'cdAgency', width: 100 },
     {
-      title: 'Conta',
-      key: 'account',
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 90,
+      render: (id: number) => (
+        <Tooltip title="ID da conta para usar em bankConfigurationId/API">
+          <Text copyable={{ text: String(id) }} style={{ fontSize: 12 }}>
+            {id}
+          </Text>
+        </Tooltip>
+      ),
+    },
+    { title: "Nome", dataIndex: "name", key: "name" },
+    { title: "Banco", dataIndex: "bank", key: "bank", width: 80 },
+    { title: "Agência", dataIndex: "cdAgency", key: "cdAgency", width: 100 },
+    {
+      title: "Conta",
+      key: "account",
       width: 130,
       render: (_, r) => `${r.cdAccount}-${r.cdAccountDigit}`,
     },
     {
-      title: 'Tipo',
-      dataIndex: 'accountType',
-      key: 'accountType',
+      title: "Tipo",
+      dataIndex: "accountType",
+      key: "accountType",
       width: 110,
-      render: (type) => (type === 'CHECKING' ? 'Corrente' : 'Poupança'),
+      render: (type) => (type === "CHECKING" ? "Corrente" : "Poupança"),
     },
     {
-      title: 'Status',
-      dataIndex: 'active',
-      key: 'active',
+      title: "Status",
+      dataIndex: "active",
+      key: "active",
       width: 90,
       render: (active: boolean) => (
-        <Tag color={active ? 'success' : 'default'}>{active ? 'Ativa' : 'Inativa'}</Tag>
+        <Tag color={active ? "success" : "default"}>
+          {active ? "Ativa" : "Inativa"}
+        </Tag>
       ),
     },
     {
-      title: 'Ações',
-      key: 'actions',
+      title: "Ações",
+      key: "actions",
       width: 130,
       render: (_, record) => (
         <Space>
-          <Tooltip title={canManageConfig ? 'Configurações do provedor' : 'Somente administradores'}>
+          <Tooltip
+            title={
+              canManageConfig
+                ? "Configurações do provedor"
+                : "Somente administradores"
+            }
+          >
             <Button
               type="text"
               size="small"
               icon={<SettingOutlined />}
               disabled={!canManageConfig}
-              onClick={() => router.push(`/dashboard/bank-accounts/${record.id}/config`)}
+              onClick={() =>
+                router.push(`/dashboard/bank-accounts/${record.id}/config`)
+              }
             />
           </Tooltip>
           <Button
@@ -201,13 +246,21 @@ export default function BankAccountsPage() {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
         <div>
           <Title level={3} style={{ marginBottom: 4 }}>
             Contas Bancárias
           </Title>
-          <Text type="secondary">Cadastre e gerencie contas usadas nas integrações.</Text>
+          <Text type="secondary">
+            Cadastre e gerencie contas usadas nas integrações.
+          </Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           Nova Conta
@@ -233,33 +286,47 @@ export default function BankAccountsPage() {
               style={{ width: 180 }}
               onChange={(value) => setStatusFilter(value)}
               options={[
-                { label: 'Todos os status', value: 'ALL' },
-                { label: 'Ativa', value: 'ACTIVE' },
-                { label: 'Inativa', value: 'INACTIVE' },
+                { label: "Todos os status", value: "ALL" },
+                { label: "Ativa", value: "ACTIVE" },
+                { label: "Inativa", value: "INACTIVE" },
               ]}
             />
           </Space>
         )}
-        pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
-        locale={{ emptyText: 'Nenhuma conta bancária configurada. Clique em "Nova Conta" para começar.' }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: false,
+          hideOnSinglePage: true,
+        }}
+        locale={{
+          emptyText:
+            'Nenhuma conta bancária configurada. Clique em "Nova Conta" para começar.',
+        }}
         scroll={{ x: 600 }}
       />
 
       <Modal
-        title={editingId !== null ? 'Editar Conta Bancária' : 'Nova Conta Bancária'}
+        title={
+          editingId !== null ? "Editar Conta Bancária" : "Nova Conta Bancária"
+        }
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
-        okText={editingId !== null ? 'Salvar alterações' : 'Adicionar conta'}
+        okText={editingId !== null ? "Salvar alterações" : "Adicionar conta"}
         cancelText="Cancelar"
         confirmLoading={submitting}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          style={{ marginTop: 16 }}
+        >
           <Form.Item
             label="Nome da Conta"
             name="name"
-            rules={[{ required: true, message: 'Informe o nome da conta' }]}
+            rules={[{ required: true, message: "Informe o nome da conta" }]}
           >
             <Input placeholder="Ex: Conta Principal" />
           </Form.Item>
@@ -267,33 +334,39 @@ export default function BankAccountsPage() {
           <Form.Item label="Banco" name="bank" rules={[{ required: true }]}>
             <Select
               options={[
-                { value: 'EFI', label: 'EFI (Efí Pay)' },
-                { value: 'ASAAS', label: 'ASAAS' },
+                { value: "EFI", label: "EFI (Efí Pay)" },
+                { value: "ASAAS", label: "ASAAS" },
               ]}
             />
           </Form.Item>
 
-          <Form.Item label="Tipo de Conta" name="accountType" rules={[{ required: true }]}>
+          <Form.Item
+            label="Tipo de Conta"
+            name="accountType"
+            rules={[{ required: true }]}
+          >
             <Select
               options={[
-                { value: 'CHECKING', label: 'Corrente' },
-                { value: 'SAVINGS', label: 'Poupança' },
+                { value: "CHECKING", label: "Corrente" },
+                { value: "SAVINGS", label: "Poupança" },
               ]}
             />
           </Form.Item>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <Form.Item
               label="Agência"
               name="cdAgency"
-              rules={[{ required: true, message: 'Informe a agência' }]}
+              rules={[{ required: true, message: "Informe a agência" }]}
             >
               <Input placeholder="1234" />
             </Form.Item>
             <Form.Item
               label="Conta"
               name="cdAccount"
-              rules={[{ required: true, message: 'Informe o número da conta' }]}
+              rules={[{ required: true, message: "Informe o número da conta" }]}
             >
               <Input placeholder="123456" />
             </Form.Item>
@@ -303,8 +376,8 @@ export default function BankAccountsPage() {
             label="Dígito verificador"
             name="cdAccountDigit"
             rules={[
-              { required: true, message: 'Informe o dígito' },
-              { max: 2, message: 'Máximo 2 caracteres' },
+              { required: true, message: "Informe o dígito" },
+              { max: 2, message: "Máximo 2 caracteres" },
             ]}
           >
             <Input placeholder="0" maxLength={2} style={{ width: 80 }} />

@@ -574,6 +574,7 @@ export default function TransactionsPage() {
     {
       title: "Descrição / Referência",
       key: "ref",
+      width: 360,
       render: (_: unknown, record: Transaction) => (
         <Space direction="vertical" size={4} style={{ maxWidth: 340 }}>
           {record.description ? (
@@ -589,14 +590,22 @@ export default function TransactionsPage() {
           )}
 
           {record.externalReference && (
-            <Space size={4} align="center">
-              <Text type="secondary" style={{ fontSize: 12 }}>
+            <Space
+              size={4}
+              align="center"
+              style={{ maxWidth: 340, flexWrap: "nowrap" }}
+            >
+              <Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
                 Ref.
               </Text>
               <Text
                 code
-                copyable={{ tooltips: ["Copiar referência", "Copiada"] }}
-                style={{ fontSize: 12, marginInlineEnd: 0 }}
+                ellipsis={{ tooltip: record.externalReference }}
+                copyable={{
+                  text: record.externalReference,
+                  tooltips: ["Copiar referência", "Copiada"],
+                }}
+                style={{ fontSize: 12, marginInlineEnd: 0, maxWidth: 280 }}
               >
                 {record.externalReference}
               </Text>
@@ -684,6 +693,13 @@ export default function TransactionsPage() {
                 )}
               </Space>
             );
+          }
+
+          // Boleto com links próprios (ex.: EFI) não deve exibir o checkout do
+          // sistema — apenas os links do boleto (tratados em fallbackBoleto).
+          const isBoleto = record.instrument === "BOLETO";
+          if (isBoleto && (record.boletoInvoiceUrl || record.boletoPdfUrl)) {
+            return null;
           }
 
           const token = resolveCheckoutToken(

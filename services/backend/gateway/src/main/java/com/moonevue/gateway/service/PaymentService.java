@@ -377,7 +377,14 @@ public class PaymentService {
         charge.setAmountPaid(BigDecimal.ZERO);
         charge.setDueDate(parseDueDate(resp.getDueDate()));
         charge.setPixCopyPaste(resp.getPixCopiaECola());
-        charge.setPixQrCodeRef(resp.getLocation());
+        // Para boleto, alguns provedores (ex.: EFI) não retornam "location"; o link de
+        // pagamento vem em link/billetLink. Reutilizamos pixQrCodeRef como referência de
+        // invoice (mesmo campo lido como boletoInvoiceUrl na listagem), espelhando o ASAAS.
+        String invoiceRef = resp.getLocation();
+        if (invoiceRef == null && request.payment().instrument() == ChargeRequestDTO.Instrument.BOLETO) {
+            invoiceRef = resp.getLink() != null ? resp.getLink() : resp.getBilletLink();
+        }
+        charge.setPixQrCodeRef(invoiceRef);
         charge.setBoletoLine(resp.getBarcode());
         charge.setBoletoPdfRef(resp.getPdfLink());
         charge.setProviderPayload(payloadJson);
